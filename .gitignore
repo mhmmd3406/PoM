@@ -1,4 +1,10 @@
 node_modules/
+# .NET
+bin/
+obj/
+*.user
+.vs/
+*.suo
 .env
 .env.local
 .env.production
