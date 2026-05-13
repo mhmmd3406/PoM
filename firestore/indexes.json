@@ -90,6 +90,38 @@
         { "fieldPath": "status",       "order": "ASCENDING" },
         { "fieldPath": "generated_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "b2b_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "bank_id", "order": "ASCENDING" },
+        { "fieldPath": "year",    "order": "ASCENDING" },
+        { "fieldPath": "month",   "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "stripe_customer_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subscription_tier",   "order": "ASCENDING" },
+        { "fieldPath": "subscription_status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "api_keys",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "key_hash",  "order": "ASCENDING" },
+        { "fieldPath": "is_active", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

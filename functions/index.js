@@ -10,6 +10,13 @@ const { grantSignupBonus, awardCheckinCredits, authorizeQuery, recordMicropaymen
 const { updateAggregation, reconcileAggregations, getInsights } = require('./src/aggregations');
 const { generateB2BSnapshots, getB2BTrendFromSnapshots } = require('./src/b2bSnapshots');
 const { handleLinkedInCallback, linkedinSecrets } = require('./src/linkedinAuth');
+const {
+  handleSubscriptionWebhook,
+  syncSubscriptionClaim,
+  createCheckoutSession,
+  createPortalSession,
+  subscriptionSecrets,
+} = require('./src/subscriptions');
 const { defineSecret } = require('firebase-functions/params');
 
 // All secrets are stored in Google Cloud Secret Manager.
@@ -228,12 +235,44 @@ exports.linkedinCallback = functions
   .https.onRequest(handleLinkedInCallback);
 
 // ---------------------------------------------------------------------------
-// Stripe: payment intents + webhook (secrets via Secret Manager)
+// Stripe: payment intents + micropayment webhook (secrets via Secret Manager)
 // ---------------------------------------------------------------------------
 const stripe = require('./src/stripe');
 exports.createPaymentIntent = stripe.createPaymentIntent;
-exports.confirmPurchase = stripe.confirmPurchase;
-exports.stripeWebhook = stripe.stripeWebhook;
+exports.confirmPurchase     = stripe.confirmPurchase;
+exports.stripeWebhook       = stripe.stripeWebhook;
+
+// ---------------------------------------------------------------------------
+// Stripe: subscription lifecycle webhook (invoice.paid, subscription.deleted)
+// Uses a separate webhook secret so subscription and micropayment endpoints
+// can have independent Stripe webhook registrations.
+// ---------------------------------------------------------------------------
+exports.stripeSubscriptionWebhook = functions
+  .runWith({ secrets: subscriptionSecrets })
+  .https.onRequest(handleSubscriptionWebhook);
+
+// ---------------------------------------------------------------------------
+// Callable: create Stripe Checkout Session for subscription signup
+// ---------------------------------------------------------------------------
+exports.createCheckoutSession = functions
+  .runWith({ secrets: subscriptionSecrets })
+  .https.onCall(createCheckoutSession);
+
+// ---------------------------------------------------------------------------
+// Callable: open Stripe Customer Portal for subscription management
+// ---------------------------------------------------------------------------
+exports.createPortalSession = functions
+  .runWith({ secrets: subscriptionSecrets })
+  .https.onCall(createPortalSession);
+
+// ---------------------------------------------------------------------------
+// Firestore trigger: sync subscription_tier → Firebase Auth custom claim
+// Fires whenever a users/{userId} document is updated.
+// This is the authoritative source for RBAC in Firestore Rules.
+// ---------------------------------------------------------------------------
+exports.onUserSubscriptionChanged = functions.firestore
+  .document('users/{userId}')
+  .onUpdate(syncSubscriptionClaim);
 
 // ---------------------------------------------------------------------------
 // Scheduled: nightly aggregation reconciliation — 03:00 UTC

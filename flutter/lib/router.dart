@@ -8,6 +8,7 @@ import 'screens/home/home_screen.dart';
 import 'screens/checkin/checkin_screen.dart';
 import 'screens/insights/insights_screen.dart';
 import 'screens/wallet/wallet_screen.dart';
+import 'screens/subscription/subscription_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authStateProvider);
@@ -35,6 +36,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/checkin', builder: (_, __) => const CheckinScreen()),
       GoRoute(path: '/insights', builder: (_, __) => const InsightsScreen()),
       GoRoute(path: '/wallet', builder: (_, __) => const WalletScreen()),
+      GoRoute(path: '/subscription', builder: (_, __) => const SubscriptionScreen()),
     ],
   );
 });

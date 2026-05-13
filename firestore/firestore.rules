@@ -4,7 +4,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // -----------------------------------------------------------------------
-    // Helper functions
+    // RBAC helpers — subscription_tier is a Firebase custom claim set by
+    // Cloud Function triggers whenever the users/{uid} document changes.
+    // Tiers in ascending privilege order:
+    //   free → pro → standard → professional → enterprise → daas
     // -----------------------------------------------------------------------
 
     function isAuthenticated() {
@@ -15,21 +18,32 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isB2BUser() {
-      return isAuthenticated() && request.auth.token.b2b_bank_id != null;
+    function tier() {
+      return request.auth.token.get('subscription_tier', 'free');
     }
 
-    // Privacy gate: only expose aggregation data when N >= 7
+    function isAtLeastPro() {
+      return tier() in ['pro', 'standard', 'professional', 'enterprise', 'daas'];
+    }
+
+    function isAtLeastEnterprise() {
+      return tier() in ['enterprise', 'daas'];
+    }
+
+    function isB2BUser() {
+      return isAuthenticated()
+          && request.auth.token.get('b2b_bank_id', null) != null;
+    }
+
+    // Privacy gate: document must have N >= 7 entries to be readable
     function meetsPrivacyThreshold(doc) {
       return doc.data.entry_count >= 7;
     }
 
-    // Validate that a rating value is an integer between 1 and 5
     function validRating(v) {
       return v is int && v >= 1 && v <= 5;
     }
 
-    // Validate incoming check-in ratings map
     function validRatings(ratings) {
       return validRating(ratings.salary)
           && validRating(ratings.benefits)
@@ -39,56 +53,50 @@ service cloud.firestore {
     }
 
     // -----------------------------------------------------------------------
-    // users collection
+    // users/{userId}
     // -----------------------------------------------------------------------
     match /users/{userId} {
-      // Users can read their own document only
       allow read: if isOwner(userId);
 
-      // Creation happens via Cloud Function (Admin SDK) — deny direct client creates
+      // Direct client creates are forbidden — Cloud Function onUserCreated handles this
       allow create: if false;
 
-      // Allow updates to mutable profile fields only (not linkedin_hash, joined_at)
+      // Only mutable profile fields; subscription fields are server-only
       allow update: if isOwner(userId)
         && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['linkedin_hash', 'joined_at', 'credits']);
-        // credits are mutated only by Cloud Functions via Admin SDK
+            .hasAny([
+              'linkedin_hash', 'joined_at', 'credits',
+              'subscription_tier', 'subscription_status',
+              'subscription_expires_at', 'stripe_customer_id', 'api_key'
+            ]);
 
       allow delete: if false;
     }
 
     // -----------------------------------------------------------------------
-    // credit_transactions collection
+    // credit_transactions/{txnId}
     // -----------------------------------------------------------------------
     match /credit_transactions/{txnId} {
-      // Read own transactions only
       allow read: if isAuthenticated()
         && resource.data.user_id == request.auth.uid;
-
-      // All writes via Cloud Functions (Admin SDK) only
       allow write: if false;
     }
 
     // -----------------------------------------------------------------------
-    // banks collection
+    // banks/{bankId}
     // -----------------------------------------------------------------------
     match /banks/{bankId} {
-      // Any authenticated user can list/read banks (for the bank picker UI)
       allow read: if isAuthenticated() && resource.data.is_active == true;
-
-      // Only admin via Cloud Functions
       allow write: if false;
     }
 
     // -----------------------------------------------------------------------
-    // checkins collection
+    // checkins/{checkinId}
+    // Raw check-in data is never readable by clients (privacy by design).
     // -----------------------------------------------------------------------
     match /checkins/{checkinId} {
-      // Clients NEVER read raw check-in data — privacy by design
       allow read: if false;
 
-      // Allow authenticated users to create their own check-in
-      // (Cloud Function validates the weekly-limit; rule handles basic shape)
       allow create: if isAuthenticated()
         && request.resource.data.keys().hasAll([
             'user_hash', 'bank_id', 'business_family', 'department_type',
@@ -104,69 +112,91 @@ service cloud.firestore {
     }
 
     // -----------------------------------------------------------------------
-    // aggregations collection
+    // aggregations/{aggId}
+    //
+    // RBAC:
+    //   Free tier  → overall scores only (business_family == 'all')
+    //   Pro+       → any business family breakdown
+    //   Enterprise → covered by Pro+ rule; b2b_snapshots for deep access
     // -----------------------------------------------------------------------
     match /aggregations/{aggId} {
-      // Read allowed only when N >= 7 (privacy threshold)
-      allow read: if isAuthenticated() && meetsPrivacyThreshold(resource);
+      allow read: if isAuthenticated()
+        && meetsPrivacyThreshold(resource)
+        && (
+          // Free users may only read the 'all' rollup — not family breakdowns
+          resource.data.business_family == 'all'
+          || isAtLeastPro()
+        );
 
-      // All writes via Cloud Functions (Admin SDK) only
       allow write: if false;
     }
 
     // -----------------------------------------------------------------------
-    // sector_aggregations collection
+    // sector_aggregations/{aggId}
+    // Same RBAC as aggregations — sector-wide but still tiered.
     // -----------------------------------------------------------------------
     match /sector_aggregations/{aggId} {
-      // Sector-wide data is less sensitive but still requires N >= 7
-      allow read: if isAuthenticated() && meetsPrivacyThreshold(resource);
+      allow read: if isAuthenticated()
+        && meetsPrivacyThreshold(resource)
+        && (
+          resource.data.business_family == 'all'
+          || isAtLeastPro()
+        );
 
       allow write: if false;
     }
 
     // -----------------------------------------------------------------------
-    // query_sessions collection
+    // query_sessions/{sessionId}
     // -----------------------------------------------------------------------
     match /query_sessions/{sessionId} {
-      // Users can check their own active sessions
       allow read: if isAuthenticated()
         && resource.data.user_id == request.auth.uid;
-
-      // Sessions created by Cloud Functions only
       allow write: if false;
     }
 
     // -----------------------------------------------------------------------
-    // b2b_snapshots collection
-    // Differential-privacy-safe snapshots for B2B portal (published only when
-    // delta_count >= 3, preventing individual score inference attacks).
+    // b2b_snapshots/{snapId}
+    // Enterprise+ B2B users only; bank_id must match their custom claim.
+    // The DaaS widget reads this via the Admin SDK (bypasses rules).
     // -----------------------------------------------------------------------
     match /b2b_snapshots/{snapId} {
-      // B2B users can only read snapshots belonging to their own bank
       allow read: if isB2BUser()
+        && isAtLeastEnterprise()
         && resource.data.bank_id == request.auth.token.b2b_bank_id;
 
-      // Written only by Cloud Functions (Admin SDK) on schedule
       allow write: if false;
     }
 
-    // Archive is write-only from Cloud Functions — no client reads ever
     match /b2b_snapshots_archive/{archiveId} {
       allow read, write: if false;
     }
 
     // -----------------------------------------------------------------------
-    // b2b_reports collection
+    // b2b_reports/{reportId}
+    // Enterprise+ B2B users only.
     // -----------------------------------------------------------------------
     match /b2b_reports/{reportId} {
       allow read: if isB2BUser()
+        && isAtLeastEnterprise()
         && resource.data.bank_id == request.auth.token.b2b_bank_id;
 
       allow write: if false;
     }
 
     // -----------------------------------------------------------------------
-    // Deny everything else by default
+    // api_keys/{keyId}
+    // DaaS API keys — readable only by the owner for self-inspection.
+    // All writes are server-side via Admin SDK.
+    // -----------------------------------------------------------------------
+    match /api_keys/{keyId} {
+      allow read: if isAuthenticated()
+        && resource.data.owner_uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // Default deny
     // -----------------------------------------------------------------------
     match /{document=**} {
       allow read, write: if false;

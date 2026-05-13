@@ -19,6 +19,9 @@
     <!-- Excel export -->
     <PackageReference Include="ClosedXML"                  Version="0.102.3" />
 
+    <!-- Stripe subscription webhooks -->
+    <PackageReference Include="Stripe.net"                 Version="46.2.0" />
+
     <!-- OpenAPI -->
     <PackageReference Include="Swashbuckle.AspNetCore"     Version="6.7.3" />
   </ItemGroup>

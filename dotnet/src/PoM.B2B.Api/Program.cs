@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
 using Hangfire;
@@ -10,7 +11,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 // -------------------------------------------------------------------------
 // Firebase Admin SDK
-// Credentials: GOOGLE_APPLICATION_CREDENTIALS env var (service account JSON)
 // -------------------------------------------------------------------------
 FirebaseApp.Create(new AppOptions
 {
@@ -45,7 +45,7 @@ builder.Services.AddSwaggerGen(c =>
         In          = Microsoft.OpenApi.Models.ParameterLocation.Header,
         Type        = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
         Scheme      = "bearer",
-        Description = "Firebase ID Token",
+        Description = "Firebase ID Token (B2B) or X-API-Key (Widget)",
     });
     c.AddSecurityRequirement(new()
     {
@@ -55,25 +55,59 @@ builder.Services.AddSwaggerGen(c =>
 
 // -------------------------------------------------------------------------
 // Hangfire
-// Production: replace InMemory with Hangfire.SqlServer or Hangfire.Redis
 // -------------------------------------------------------------------------
-builder.Services.AddHangfire(config =>
-    config.UseInMemoryStorage());
+builder.Services.AddHangfire(cfg => cfg.UseInMemoryStorage());
 builder.Services.AddHangfireServer();
 
 // -------------------------------------------------------------------------
-// CORS (B2B portal SPA or ASP.NET Razor)
+// CORS
 // -------------------------------------------------------------------------
 builder.Services.AddCors(o => o.AddPolicy("B2BPortal", p =>
     p.WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [])
      .AllowAnyHeader()
      .AllowAnyMethod()));
 
-var app = builder.Build();
+// -------------------------------------------------------------------------
+// Rate Limiting — DaaS Widget API (built-in .NET 8, no extra package)
+//
+// Partitioned by X-API-Key so each DaaS customer has an independent bucket.
+// Default: 1 000 requests per sliding hour.
+// Per-key overrides are enforced in WidgetController after DaasAuthMiddleware
+// resolves the key and its configured rate_limit_per_hour.
+// -------------------------------------------------------------------------
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("DaasFixedWindow", httpContext =>
+    {
+        var apiKey = httpContext.Request.Headers["X-API-Key"].FirstOrDefault() ?? "anonymous";
+
+        // Use per-key limit if DaasClaims already resolved (middleware runs before controller)
+        var limit = httpContext.Items["DaasClaims"] is PoM.B2B.Api.Models.DaasClaims claims
+            ? claims.RateLimitPerHour
+            : 100; // unauthenticated fallback (will be rejected by DaasAuthMiddleware anyway)
+
+        return RateLimitPartition.GetFixedWindowLimiter(apiKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit          = limit,
+            Window               = TimeSpan.FromHours(1),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit           = 0,
+        });
+    });
+});
 
 // -------------------------------------------------------------------------
-// Middleware pipeline
+// Stripe
 // -------------------------------------------------------------------------
+Stripe.StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
+
+// -------------------------------------------------------------------------
+// Build
+// -------------------------------------------------------------------------
+var app = builder.Build();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -83,23 +117,22 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors("B2BPortal");
 
-// Firebase token + B2B claim enforcement (before controllers)
+// DaaS auth must run before B2BAuth so Widget paths are handled separately
+app.UseDaasAuth();
 app.UseB2BAuth();
+
+// Rate limiting must be registered before controllers
+app.UseRateLimiter();
 
 app.MapControllers();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", utc = DateTimeOffset.UtcNow }))
    .ExcludeFromDescription();
 
-// -------------------------------------------------------------------------
-// Hangfire dashboard (internal only — restrict in production)
-// -------------------------------------------------------------------------
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
-    // In production, add an authorization filter here
     Authorization = [],
 });
 
-// Register weekly recurring job — every Monday 06:00 UTC
 RecurringJob.AddOrUpdate<WeeklyReportJob>(
     "weekly-b2b-reports",
     job => job.RunAsync(CancellationToken.None),
