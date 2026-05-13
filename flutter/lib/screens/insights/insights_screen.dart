@@ -1,386 +1,456 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/metric_bar.dart';
+import '../../widgets/radar_chart.dart';
+
+// ── Provider ───────────────────────────────────────────────────────────────
 
 final _insightsProvider = FutureProvider.autoDispose
     .family<InsightData?, ({String bankId, int year, int month})>(
-  (ref, args) => ref.read(firestoreServiceProvider).queryInsights(
+        (ref, args) async {
+  return ref.read(firestoreServiceProvider).queryInsights(
         bankId: args.bankId,
         year: args.year,
         month: args.month,
-      ),
-);
+      );
+});
+
+// ── Screen ─────────────────────────────────────────────────────────────────
 
 class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userAsync = ref.watch(authStateProvider);
+    final user = ref.watch(authServiceProvider).asData?.value;
+    if (user == null) return const SizedBox.shrink();
 
-    return userAsync.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => Scaffold(body: Center(child: Text('$e'))),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-
-        return StreamBuilder<PomUser>(
-          stream: ref.read(firestoreServiceProvider).userStream(user.uid),
-          builder: (context, snap) {
-            if (!snap.hasData) {
-              return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()));
-            }
-            final pomUser = snap.data!;
-            if (!pomUser.isProfileComplete) {
-              return const Scaffold(
-                body: Center(child: Text('Complete your profile first.')),
-              );
-            }
-            return _InsightsBody(pomUser: pomUser);
-          },
-        );
-      },
-    );
-  }
-}
-
-class _InsightsBody extends ConsumerStatefulWidget {
-  const _InsightsBody({required this.pomUser});
-  final PomUser pomUser;
-
-  @override
-  ConsumerState<_InsightsBody> createState() => _InsightsBodyState();
-}
-
-class _InsightsBodyState extends ConsumerState<_InsightsBody> {
-  late int _year;
-  late int _month;
-
-  @override
-  void initState() {
-    super.initState();
     final now = DateTime.now();
-    _year = now.year;
-    _month = now.month;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final args = (
-      bankId: widget.pomUser.bankId!,
-      year: _year,
-      month: _month,
-    );
-    final insightsAsync = ref.watch(_insightsProvider(args));
+    final args = (bankId: user.uid, year: now.year, month: now.month);
+    final async = ref.watch(_insightsProvider(args));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Insights'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.shopping_bag_outlined),
-            tooltip: 'Get More Credits',
-            onPressed: () => context.push('/purchase'),
+          TextButton(
+            onPressed: () => ref.invalidate(_insightsProvider(args)),
+            child: const Text('Refresh'),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(_insightsProvider(args)),
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: _CreditBanner(credits: widget.pomUser.credits)
-                  .animate()
-                  .fadeIn(duration: 400.ms),
-            ),
-            SliverToBoxAdapter(
-              child: _MonthSelector(
-                year: _year,
-                month: _month,
-                onChanged: (y, m) => setState(() { _year = y; _month = m; }),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: insightsAsync.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.all(80),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (e, _) => _ErrorCard(error: '$e'),
-                data: (data) => data == null
-                    ? const _InsufficientDataCard()
-                    : _InsightCards(data: data),
-              ),
-            ),
-          ],
-        ),
+      body: async.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => _ErrorView(e.toString()),
+        data: (data) => data == null
+            ? const _PrivacyGateView()
+            : _InsightsBody(data: data),
       ),
     );
   }
 }
 
-class _CreditBanner extends StatelessWidget {
-  const _CreditBanner({required this.credits});
-  final int credits;
+// ── Body ──────────────────────────────────────────────────────────────────
+
+class _InsightsBody extends StatelessWidget {
+  const _InsightsBody({required this.data});
+  final InsightData data;
+
+  static const _metricKeys = ['salary', 'benefits', 'work_model', 'culture', 'wlb'];
+  static const _metricLabels = ['Salary', 'Benefits', 'Work Model', 'Culture', 'WLB'];
+  static const _metricIcons = ['💰', '🎁', '🏠', '🤝', '⚖️'];
 
   @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.bg2,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
+  Widget build(BuildContext context) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.bolt_rounded, color: AppColors.accent, size: 22),
-            const SizedBox(width: 10),
-            Text('$credits queries remaining',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.copyWith(color: AppColors.textPrimary)),
-            const Spacer(),
-            if (credits == 0)
-              GestureDetector(
-                onTap: () => Navigator.pushNamed(context, '/purchase'),
-                child: const Text(
-                  'Get More',
-                  style: TextStyle(
-                      color: AppColors.accent,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13),
-                ),
-              ),
+            // Period header
+            _PeriodHeader(data: data).animate().fadeIn().slideY(begin: 0.15),
+            const SizedBox(height: 24),
+
+            // Radar chart
+            Center(
+              child: _RadarSection(data: data),
+            ).animate().fadeIn(delay: 100.ms),
+
+            const SizedBox(height: 28),
+
+            // Per-metric bars
+            Text('Metric Breakdown',
+                    style: Theme.of(context).textTheme.titleMedium)
+                .animate()
+                .fadeIn(delay: 160.ms),
+            const SizedBox(height: 14),
+
+            ...List.generate(_metricKeys.length, (i) {
+              final key = _metricKeys[i];
+              final bank = data.bankAverages[key] ?? 0;
+              final sector = data.sectorAverages?[key];
+              return _MetricBar(
+                icon: _metricIcons[i],
+                label: _metricLabels[i],
+                bankScore: bank,
+                sectorScore: sector,
+                i: i,
+              );
+            }),
+
+            const SizedBox(height: 20),
+            _LegendRow(hasSector: data.sectorAverages != null)
+                .animate()
+                .fadeIn(delay: 500.ms),
           ],
         ),
       );
 }
 
-class _MonthSelector extends StatelessWidget {
-  const _MonthSelector({
-    required this.year,
-    required this.month,
-    required this.onChanged,
-  });
-  final int year;
-  final int month;
-  final void Function(int year, int month) onChanged;
+class _PeriodHeader extends StatelessWidget {
+  const _PeriodHeader({required this.data});
+  final InsightData data;
 
   @override
   Widget build(BuildContext context) {
-    final label = DateFormat('MMMM yyyy').format(DateTime(year, month));
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final period = DateFormat('MMMM yyyy')
+        .format(DateTime(data.year, data.month));
+    final overall = data.overallScore;
+    final color = overall >= 4
+        ? AppColors.positive
+        : overall >= 3
+            ? AppColors.warning
+            : AppColors.negative;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(period,
+                  style: const TextStyle(
+                      color: AppColors.textMuted, fontSize: 13)),
+              const SizedBox(height: 2),
+              const Text('Your Bank\'s Score',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700)),
+              Text('${data.bankEntryCount} responses',
+                  style: const TextStyle(
+                      color: AppColors.textMuted, fontSize: 12)),
+            ],
+          ),
+        ),
+        // Overall score orb
+        Container(
+          width: 70,
+          height: 70,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withOpacity(0.12),
+            border: Border.all(color: color.withOpacity(0.5), width: 2),
+          ),
+          child: Center(
+            child: Text(
+              overall.toStringAsFixed(1),
+              style: TextStyle(
+                  color: color,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RadarSection extends StatelessWidget {
+  const _RadarSection({required this.data});
+  final InsightData data;
+
+  @override
+  Widget build(BuildContext context) => Column(
         children: [
-          Text('Period', style: Theme.of(context).textTheme.labelLarge
-              ?.copyWith(color: AppColors.textMuted)),
+          RadarChart(
+            bankValues: data.bankAverages,
+            sectorValues: data.sectorAverages,
+            size: 260,
+          ),
+          const SizedBox(height: 8),
+          if (data.sectorAverages != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _LegendDot(color: AppColors.accent, label: 'Your Bank'),
+                const SizedBox(width: 16),
+                _LegendDot(color: AppColors.warning, label: 'Sector Avg', dashed: true),
+              ],
+            ),
+        ],
+      );
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label, this.dashed = false});
+  final Color color;
+  final String label;
+  final bool dashed;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Container(
+            width: 12,
+            height: 3,
+            decoration: BoxDecoration(
+              color: dashed ? Colors.transparent : color,
+              border: dashed ? Border.all(color: color) : null,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(label,
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+        ],
+      );
+}
+
+class _MetricBar extends StatelessWidget {
+  const _MetricBar({
+    required this.icon,
+    required this.label,
+    required this.bankScore,
+    required this.sectorScore,
+    required this.i,
+  });
+  final String icon;
+  final String label;
+  final double bankScore;
+  final double? sectorScore;
+  final int i;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = bankScore / 5.0;
+    final color = bankScore >= 4
+        ? AppColors.positive
+        : bankScore >= 3
+            ? AppColors.warning
+            : AppColors.negative;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        children: [
           Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left_rounded),
-                iconSize: 20,
-                onPressed: () {
-                  final prev = DateTime(year, month - 1);
-                  onChanged(prev.year, prev.month);
-                },
-              ),
+              Text(icon, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 10),
               Text(label,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyLarge
-                      ?.copyWith(fontWeight: FontWeight.w600)),
-              IconButton(
-                icon: const Icon(Icons.chevron_right_rounded),
-                iconSize: 20,
-                onPressed: DateTime(year, month)
-                        .isBefore(DateTime.now())
-                    ? () {
-                        final next = DateTime(year, month + 1);
-                        onChanged(next.year, next.month);
-                      }
-                    : null,
+                  style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              const Spacer(),
+              Text(bankScore.toStringAsFixed(1),
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700)),
+              if (sectorScore != null) ...[
+                const SizedBox(width: 4),
+                Text('/ ${sectorScore!.toStringAsFixed(1)} avg',
+                    style: const TextStyle(
+                        color: AppColors.textMuted, fontSize: 12)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          Stack(
+            children: [
+              // Background track
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              // Sector avg line
+              if (sectorScore != null)
+                FractionallySizedBox(
+                  widthFactor: sectorScore! / 5.0,
+                  child: Container(
+                    height: 8,
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      width: 2,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
+                  ),
+                ),
+              // Bank fill
+              FractionallySizedBox(
+                widthFactor: pct.clamp(0.0, 1.0),
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
               ),
             ],
           ),
         ],
-      ),
+      ).animate().fadeIn(delay: (i * 60 + 200).ms).slideX(begin: 0.1),
     );
   }
 }
 
-class _InsightCards extends StatelessWidget {
-  const _InsightCards({required this.data});
-  final InsightData data;
-
-  static const _metricLabels = {
-    'salary': ('💰', 'Salary'),
-    'benefits': ('🏥', 'Benefits'),
-    'work_model': ('🏠', 'Work Model'),
-    'culture': ('🤝', 'Culture'),
-    'wlb': ('⚖️', 'Work-Life Balance'),
-    'overall': ('⭐', 'Overall'),
-  };
+class _LegendRow extends StatelessWidget {
+  const _LegendRow({required this.hasSector});
+  final bool hasSector;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(20),
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.bg2,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
         child: Column(
           children: [
-            // Overall score hero
-            _ScoreHero(score: data.overallScore)
-                .animate()
-                .scale(begin: const Offset(0.9, 0.9), duration: 500.ms,
-                    curve: Curves.easeOutCubic),
-            const SizedBox(height: 20),
-
-            // Per-metric bars
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Breakdown',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 16),
-                    ...['salary', 'benefits', 'work_model', 'culture', 'wlb']
-                        .map((key) {
-                      final meta = _metricLabels[key]!;
-                      final bankVal = data.bankAverages[key] ?? 0;
-                      final sectorVal = data.sectorAverages?[key];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: MetricBar(
-                          emoji: meta.$1,
-                          label: meta.$2,
-                          value: bankVal,
-                          sectorValue: sectorVal,
-                        ),
-                      );
-                    }),
-                  ],
-                ),
+            _LegendItem(
+                color: AppColors.positive, label: '4.0 – 5.0  Thriving'),
+            _LegendItem(
+                color: AppColors.warning, label: '3.0 – 3.9  Average'),
+            _LegendItem(
+                color: AppColors.negative, label: '< 3.0  Needs attention'),
+            if (hasSector) ...[
+              const Divider(height: 14),
+              Row(
+                children: [
+                  Container(
+                    width: 2,
+                    height: 12,
+                    color: AppColors.warning.withOpacity(0.7),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Vertical bar = sector average',
+                      style:
+                          TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                ],
               ),
-            ).animate(delay: 150.ms).fadeIn().slideY(begin: 0.1, end: 0),
-
-            const SizedBox(height: 12),
-            if (data.sectorAverages != null)
-              Row(children: [
-                Container(width: 12, height: 3,
-                    color: AppColors.accent.withOpacity(0.5)),
-                const SizedBox(width: 6),
-                Text('Your bank    ',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
-                Container(width: 12, height: 3,
-                    color: AppColors.textMuted.withOpacity(0.5)),
-                const SizedBox(width: 6),
-                Text('Sector avg',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textMuted)),
-              ]),
+            ],
           ],
         ),
       );
 }
 
-class _ScoreHero extends StatelessWidget {
-  const _ScoreHero({required this.score});
-  final double score;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = AppColors.ratingColors[((score - 1).clamp(0, 4)).round()];
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Text(score.toStringAsFixed(1),
-              style: TextStyle(
-                  fontSize: 64,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                  letterSpacing: -2)),
-          const SizedBox(height: 4),
-          Text('Overall Happiness Score',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: AppColors.textSecondary)),
-        ],
-      ),
-    );
-  }
-}
-
-class _InsufficientDataCard extends StatelessWidget {
-  const _InsufficientDataCard();
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({required this.color, required this.label});
+  final Color color;
+  final String label;
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              children: [
-                const Text('🔒', style: TextStyle(fontSize: 48)),
-                const SizedBox(height: 16),
-                Text('Not enough data yet',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                Text(
-                  'We need at least 7 responses from your department to protect everyone\'s anonymity.',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: AppColors.textMuted),
-                  textAlign: TextAlign.center,
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            const SizedBox(width: 8),
+            Text(label,
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+          ],
+        ),
+      );
+}
+
+// ── Privacy gate ──────────────────────────────────────────────────────────
+
+class _PrivacyGateView extends StatelessWidget {
+  const _PrivacyGateView();
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: AppColors.accent.withOpacity(0.3), width: 2),
                 ),
-              ],
-            ),
+                child: const Center(
+                  child: Text('🔒', style: TextStyle(fontSize: 36)),
+                ),
+              ).animate().scale(
+                  begin: const Offset(0.6, 0.6), curve: Curves.elasticOut),
+              const SizedBox(height: 24),
+              const Text('Your Privacy is Protected',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700))
+                  .animate()
+                  .fadeIn(delay: 200.ms),
+              const SizedBox(height: 10),
+              Text(
+                'Insights are only shown when 7+ employees from your bank have shared a pulse. This protects individual anonymity.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.5), fontSize: 14, height: 1.5),
+              ).animate().fadeIn(delay: 300.ms),
+              const SizedBox(height: 28),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.share_rounded, size: 18),
+                label: const Text('Invite Colleagues'),
+              ).animate().fadeIn(delay: 450.ms),
+            ],
           ),
         ),
       );
 }
 
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.error});
-  final String error;
+class _ErrorView extends StatelessWidget {
+  const _ErrorView(this.message);
+  final String message;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(children: [
-              const Icon(Icons.error_outline_rounded,
-                  color: AppColors.negative, size: 40),
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('⚠️', style: TextStyle(fontSize: 40)),
               const SizedBox(height: 12),
-              Text(error,
+              Text(message,
+                  textAlign: TextAlign.center,
                   style:
-                      const TextStyle(color: AppColors.negative, fontSize: 13),
-                  textAlign: TextAlign.center),
-            ]),
+                      const TextStyle(color: AppColors.textMuted, fontSize: 14)),
+            ],
           ),
         ),
       );
