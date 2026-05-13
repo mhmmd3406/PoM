@@ -3,7 +3,7 @@ using PoM.B2B.Api.Models;
 
 namespace PoM.B2B.Api.Services;
 
-public sealed class FirestoreService
+public sealed class FirestoreService : IFirestoreService
 {
     private readonly FirestoreDb _db;
     private const int PrivacyThreshold = 7;

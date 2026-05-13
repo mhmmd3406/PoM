@@ -6,7 +6,7 @@ namespace PoM.B2B.Api.Controllers;
 
 [ApiController]
 [Route("api/benchmark")]
-public sealed class BenchmarkController(FirestoreService firestore) : ControllerBase
+public sealed class BenchmarkController(IFirestoreService firestore) : ControllerBase
 {
     /// <summary>
     /// Compares the authenticated bank's snapshot scores against the sector

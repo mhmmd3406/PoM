@@ -6,7 +6,7 @@ namespace PoM.B2B.Api.Controllers;
 
 [ApiController]
 [Route("api/trend")]
-public sealed class TrendController(FirestoreService firestore) : ControllerBase
+public sealed class TrendController(IFirestoreService firestore) : ControllerBase
 {
     /// <summary>
     /// Month-over-month happiness trend for the authenticated bank.

@@ -30,7 +30,7 @@ public sealed class ReportJob(ReportGeneratorService reportGenerator)
 /// Scheduled every Monday at 06:00 UTC (after daily snapshot at 04:00 UTC).
 /// </summary>
 public sealed class WeeklyReportJob(
-    FirestoreService firestore,
+    IFirestoreService firestore,
     ReportGeneratorService reportGenerator,
     ILogger<WeeklyReportJob> logger)
 {

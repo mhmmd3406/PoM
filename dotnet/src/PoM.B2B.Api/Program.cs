@@ -21,7 +21,7 @@ FirebaseApp.Create(new AppOptions
 // -------------------------------------------------------------------------
 // Services
 // -------------------------------------------------------------------------
-builder.Services.AddSingleton<FirestoreService>();
+builder.Services.AddSingleton<IFirestoreService, FirestoreService>();
 builder.Services.AddSingleton<ReportGeneratorService>();
 builder.Services.AddScoped<ReportJob>();
 builder.Services.AddScoped<WeeklyReportJob>();

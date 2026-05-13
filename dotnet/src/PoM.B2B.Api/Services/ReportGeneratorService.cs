@@ -7,7 +7,7 @@ namespace PoM.B2B.Api.Services;
 /// Builds in-memory Excel or JSON reports from trend + benchmark data.
 /// Completed reports are cached briefly in memory (production: use Azure Blob / GCS).
 /// </summary>
-public sealed class ReportGeneratorService(FirestoreService firestore)
+public sealed class ReportGeneratorService(IFirestoreService firestore)
 {
     // In production this would be a distributed cache or object storage.
     // For the MVP, a thread-safe dict keyed by jobId is sufficient.
