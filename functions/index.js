@@ -7,7 +7,8 @@ admin.initializeApp();
 
 const { mapTitleToBusinessFamily } = require('./src/titleMapper');
 const { grantSignupBonus, awardCheckinCredits, authorizeQuery, recordMicropayment } = require('./src/credits');
-const { updateAggregation, reconcileAggregations, getInsights, getTrendData } = require('./src/aggregations');
+const { updateAggregation, reconcileAggregations, getInsights } = require('./src/aggregations');
+const { generateB2BSnapshots, getB2BTrendFromSnapshots } = require('./src/b2bSnapshots');
 const { handleLinkedInCallback, linkedinSecrets } = require('./src/linkedinAuth');
 const { defineSecret } = require('firebase-functions/params');
 
@@ -195,12 +196,17 @@ exports.mapTitle = functions.https.onCall((data) => {
 });
 
 // ---------------------------------------------------------------------------
-// Callable: B2B trend data (restricted to authenticated bank portal users)
+// Callable: B2B trend data — reads from SNAPSHOTS, never from live aggregations.
+//
+// Privacy rationale: live aggregations update on every check-in, enabling a
+// differential attack (observer computes new_avg * N - old_avg * (N-1) to
+// recover the exact score of the Nth submitter). Snapshots are published only
+// when delta_count >= MIN_SNAPSHOT_DELTA (3), making individual scores
+// mathematically irrecoverable from consecutive snapshots.
 // ---------------------------------------------------------------------------
 exports.getBankTrend = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required');
 
-  // B2B callers must have a custom claim set server-side during B2B onboarding
   if (!context.auth.token?.b2b_bank_id) {
     throw new functions.https.HttpsError('permission-denied', 'B2B access only');
   }
@@ -208,7 +214,9 @@ exports.getBankTrend = functions.https.onCall(async (data, context) => {
   const bankId = context.auth.token.b2b_bank_id;
   const { businessFamily, fromYear, fromMonth, toYear, toMonth } = data;
 
-  const trend = await getTrendData(bankId, businessFamily, fromYear, fromMonth, toYear, toMonth);
+  const trend = await getB2BTrendFromSnapshots(
+    bankId, businessFamily, fromYear, fromMonth, toYear, toMonth,
+  );
   return { trend };
 });
 
@@ -228,16 +236,15 @@ exports.confirmPurchase = stripe.confirmPurchase;
 exports.stripeWebhook = stripe.stripeWebhook;
 
 // ---------------------------------------------------------------------------
-// Scheduled: nightly aggregation reconciliation (Cloud Scheduler cron)
+// Scheduled: nightly aggregation reconciliation — 03:00 UTC
 // ---------------------------------------------------------------------------
 exports.reconcileAggregationsScheduled = functions.pubsub
-  .schedule('0 3 * * *') // 03:00 UTC daily
+  .schedule('0 3 * * *')
   .timeZone('UTC')
   .onRun(async () => {
     const now = new Date();
     const year = now.getUTCFullYear();
     const month = now.getUTCMonth() + 1;
-    // Reconcile current month and previous month (covers month boundaries)
     const prevMonth = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
 
@@ -246,4 +253,18 @@ exports.reconcileAggregationsScheduled = functions.pubsub
       reconcileAggregations(prevYear, prevMonth),
     ]);
     console.log(`Reconciliation complete for ${year}-${month} and ${prevYear}-${prevMonth}`);
+  });
+
+// ---------------------------------------------------------------------------
+// Scheduled: daily B2B snapshot generation — 04:00 UTC (after reconciliation)
+//
+// Only publishes a snapshot when delta_count >= 3 new entries exist since the
+// last snapshot, preventing differential privacy attacks on B2B trend data.
+// ---------------------------------------------------------------------------
+exports.generateB2BSnapshotsScheduled = functions.pubsub
+  .schedule('0 4 * * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    const { published, skipped } = await generateB2BSnapshots();
+    console.log(`B2B snapshots: ${published} published, ${skipped} withheld (delta < 3)`);
   });

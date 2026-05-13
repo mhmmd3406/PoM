@@ -73,6 +73,16 @@
       ]
     },
     {
+      "collectionGroup": "b2b_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "bank_id",         "order": "ASCENDING" },
+        { "fieldPath": "business_family", "order": "ASCENDING" },
+        { "fieldPath": "year",            "order": "ASCENDING" },
+        { "fieldPath": "month",           "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "b2b_reports",
       "queryScope": "COLLECTION",
       "fields": [

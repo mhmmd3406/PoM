@@ -7,9 +7,11 @@ users/{userId}
 credit_transactions/{txnId}
 banks/{bankId}
 checkins/{checkinId}
-aggregations/{aggId}              ← bank × family × year-month
+aggregations/{aggId}              ← bank × family × year-month (real-time, consumer app)
 sector_aggregations/{aggId}       ← industry-wide × family × year-month
 query_sessions/{sessionId}        ← day-pass / bank-unlock grants
+b2b_snapshots/{snapId}            ← daily frozen snapshots for B2B portal (differential-privacy-safe)
+b2b_snapshots_archive/{archiveId} ← immutable audit trail of replaced snapshots
 b2b_reports/{reportId}
 ```
 
@@ -141,9 +143,30 @@ Grants temporary access without spending per-query credits.
 
 ---
 
+## `b2b_snapshots`
+
+Document ID format: `{bankId}_{businessFamily}_{year}_{MM}`
+
+Daily frozen aggregations served exclusively to B2B clients. Never updated in real-time.
+
+| Field | Type | Notes |
+|---|---|---|
+| `bank_id` | string | |
+| `business_family` | string | |
+| `year` | number | |
+| `month` | number | |
+| `entry_count` | number | cumulative total at snapshot time |
+| `delta_count` | number | new entries since previous snapshot — **must be ≥ 3 to publish** |
+| `averages` | map | same shape as aggregations |
+| `snapshot_date` | timestamp | when this snapshot was generated |
+| `previous_snapshot_date` | timestamp \| null | |
+
+---
+
 ## Privacy Enforcement Summary
 
 1. `aggregations.entry_count < 7` → Firestore rules **deny** reads.
 2. Cloud Functions **re-check** entry_count before constructing API responses.
 3. `checkins` collection is **never readable** by end-users (write-only from client, read only by Cloud Functions running with Admin SDK).
 4. `users.linkedin_hash` is write-once; update blocked by security rules.
+5. **Differential Privacy (B2B):** `b2b_snapshots` are published only when `delta_count ≥ 3`. An attacker observing two consecutive snapshots faces ≥3 unknowns in one equation — individual scores are mathematically irrecoverable. B2B clients **never** query live `aggregations`.
