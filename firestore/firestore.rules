@@ -1,0 +1,158 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -----------------------------------------------------------------------
+    // Helper functions
+    // -----------------------------------------------------------------------
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isB2BUser() {
+      return isAuthenticated() && request.auth.token.b2b_bank_id != null;
+    }
+
+    // Privacy gate: only expose aggregation data when N >= 7
+    function meetsPrivacyThreshold(doc) {
+      return doc.data.entry_count >= 7;
+    }
+
+    // Validate that a rating value is an integer between 1 and 5
+    function validRating(v) {
+      return v is int && v >= 1 && v <= 5;
+    }
+
+    // Validate incoming check-in ratings map
+    function validRatings(ratings) {
+      return validRating(ratings.salary)
+          && validRating(ratings.benefits)
+          && validRating(ratings.work_model)
+          && validRating(ratings.culture)
+          && validRating(ratings.wlb);
+    }
+
+    // -----------------------------------------------------------------------
+    // users collection
+    // -----------------------------------------------------------------------
+    match /users/{userId} {
+      // Users can read their own document only
+      allow read: if isOwner(userId);
+
+      // Creation happens via Cloud Function (Admin SDK) — deny direct client creates
+      allow create: if false;
+
+      // Allow updates to mutable profile fields only (not linkedin_hash, joined_at)
+      allow update: if isOwner(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['linkedin_hash', 'joined_at', 'credits']);
+        // credits are mutated only by Cloud Functions via Admin SDK
+
+      allow delete: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // credit_transactions collection
+    // -----------------------------------------------------------------------
+    match /credit_transactions/{txnId} {
+      // Read own transactions only
+      allow read: if isAuthenticated()
+        && resource.data.user_id == request.auth.uid;
+
+      // All writes via Cloud Functions (Admin SDK) only
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // banks collection
+    // -----------------------------------------------------------------------
+    match /banks/{bankId} {
+      // Any authenticated user can list/read banks (for the bank picker UI)
+      allow read: if isAuthenticated() && resource.data.is_active == true;
+
+      // Only admin via Cloud Functions
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // checkins collection
+    // -----------------------------------------------------------------------
+    match /checkins/{checkinId} {
+      // Clients NEVER read raw check-in data — privacy by design
+      allow read: if false;
+
+      // Allow authenticated users to create their own check-in
+      // (Cloud Function validates the weekly-limit; rule handles basic shape)
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll([
+            'user_hash', 'bank_id', 'business_family', 'department_type',
+            'seniority_level', 'year', 'month', 'week_number', 'ratings', 'created_at'
+          ])
+        && validRatings(request.resource.data.ratings)
+        && request.resource.data.year is int
+        && request.resource.data.month is int
+        && request.resource.data.month >= 1
+        && request.resource.data.month <= 12;
+
+      allow update, delete: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // aggregations collection
+    // -----------------------------------------------------------------------
+    match /aggregations/{aggId} {
+      // Read allowed only when N >= 7 (privacy threshold)
+      allow read: if isAuthenticated() && meetsPrivacyThreshold(resource);
+
+      // All writes via Cloud Functions (Admin SDK) only
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // sector_aggregations collection
+    // -----------------------------------------------------------------------
+    match /sector_aggregations/{aggId} {
+      // Sector-wide data is less sensitive but still requires N >= 7
+      allow read: if isAuthenticated() && meetsPrivacyThreshold(resource);
+
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // query_sessions collection
+    // -----------------------------------------------------------------------
+    match /query_sessions/{sessionId} {
+      // Users can check their own active sessions
+      allow read: if isAuthenticated()
+        && resource.data.user_id == request.auth.uid;
+
+      // Sessions created by Cloud Functions only
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // b2b_reports collection
+    // -----------------------------------------------------------------------
+    match /b2b_reports/{reportId} {
+      // B2B users can read reports scoped to their own bank
+      allow read: if isB2BUser()
+        && resource.data.bank_id == request.auth.token.b2b_bank_id;
+
+      // Generated by Cloud Functions / ASP.NET backend only
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // Deny everything else by default
+    // -----------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
