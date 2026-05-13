@@ -8,6 +8,12 @@ admin.initializeApp();
 const { mapTitleToBusinessFamily } = require('./src/titleMapper');
 const { grantSignupBonus, awardCheckinCredits, authorizeQuery, recordMicropayment } = require('./src/credits');
 const { updateAggregation, reconcileAggregations, getInsights, getTrendData } = require('./src/aggregations');
+const { handleLinkedInCallback, linkedinSecrets } = require('./src/linkedinAuth');
+const { defineSecret } = require('firebase-functions/params');
+
+// All secrets are stored in Google Cloud Secret Manager.
+// Provision via: firebase functions:secrets:set <NAME>
+const linkedinIdSalt = defineSecret('LINKEDIN_ID_SALT');
 
 const db = admin.firestore();
 
@@ -15,15 +21,17 @@ const db = admin.firestore();
 // Auth: on user creation via LinkedIn OAuth
 // Hashes the LinkedIn UID and creates the user document.
 // ---------------------------------------------------------------------------
-exports.onUserCreated = functions.auth.user().onCreate(async (user) => {
-  const crypto = require('crypto');
-  const salt = process.env.LINKEDIN_ID_SALT;
-  if (!salt) throw new functions.https.HttpsError('internal', 'Salt not configured');
+exports.onUserCreated = functions
+  .runWith({ secrets: ['LINKEDIN_ID_SALT'] })
+  .auth.user()
+  .onCreate(async (user) => {
+    const crypto = require('crypto');
+    const salt = linkedinIdSalt.value();
 
-  const linkedinHash = crypto
-    .createHmac('sha256', salt)
-    .update(user.uid)
-    .digest('hex');
+    const linkedinHash = crypto
+      .createHmac('sha256', salt)
+      .update(user.uid)
+      .digest('hex');
 
   await db.collection('users').doc(user.uid).set({
     linkedin_hash: linkedinHash,
@@ -203,6 +211,21 @@ exports.getBankTrend = functions.https.onCall(async (data, context) => {
   const trend = await getTrendData(bankId, businessFamily, fromYear, fromMonth, toYear, toMonth);
   return { trend };
 });
+
+// ---------------------------------------------------------------------------
+// HTTP: LinkedIn OAuth callback (called by Flutter via deep-link redirect)
+// ---------------------------------------------------------------------------
+exports.linkedinCallback = functions
+  .runWith({ secrets: linkedinSecrets })
+  .https.onRequest(handleLinkedInCallback);
+
+// ---------------------------------------------------------------------------
+// Stripe: payment intents + webhook (secrets via Secret Manager)
+// ---------------------------------------------------------------------------
+const stripe = require('./src/stripe');
+exports.createPaymentIntent = stripe.createPaymentIntent;
+exports.confirmPurchase = stripe.confirmPurchase;
+exports.stripeWebhook = stripe.stripeWebhook;
 
 // ---------------------------------------------------------------------------
 // Scheduled: nightly aggregation reconciliation (Cloud Scheduler cron)
