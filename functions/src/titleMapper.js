@@ -15,13 +15,18 @@
 // ---------------------------------------------------------------------------
 
 const BRANCH_SIGNALS = [
+  // English
   'branch',
   'teller',
   'cashier',
   'counter service',
-  'front office',  // branch context only when paired with retail signals
+  'front office',
   'retail banking',
   'personal banking',
+  // Turkish
+  'şube',       // branch
+  'vezne',      // teller desk
+  'bireysel',   // retail/personal (branch context)
 ];
 
 const FAMILIES = [
@@ -78,6 +83,27 @@ const FAMILIES = [
       'agile coach',
       'blockchain',
       'api developer',
+      // Turkish IT titles
+      'yazılım mühendisi',
+      'yazılım geliştirici',
+      'yazılım uzmanı',
+      'veri bilimci',
+      'veri mühendisi',
+      'veri analisti',
+      'siber güvenlik',
+      'bilgi güvenliği',
+      'sistem yöneticisi',
+      'ağ mühendisi',
+      'altyapı uzmanı',
+      'bilgi işlem',        // IT department
+      'uygulama geliştirici',
+      'mobil geliştirici',
+      'test mühendisi',
+      'kalite güvence',
+      'dijital dönüşüm',
+      'dijital bankacılık',
+      'yapay zeka',
+      'makine öğrenmesi',
     ],
   },
 
@@ -112,6 +138,25 @@ const FAMILIES = [
       'liquidity',
       'alm',  // asset-liability management
       'market risk',
+      // Turkish Treasury/Finance titles
+      'portföy yönetmeni',   // Portfolio Manager
+      'portföy yöneticisi',
+      'hazine',              // Treasury
+      'varlık yönetimi',     // Asset Management
+      'sermaye piyasaları',  // Capital Markets
+      'sabit getirili',      // Fixed Income
+      'türev ürünler',       // Derivatives
+      'finansal analist',    // Financial Analyst
+      'mali işler',          // Finance/Accounting
+      'muhasebe',            // Accounting
+      'muhasebeci',
+      'bütçe',               // Budget
+      'aktüer',              // Actuary
+      'likidite',            // Liquidity
+      'piyasa riski',        // Market Risk
+      'yatırım bankacılığı', // Investment Banking
+      'kurumsal finansman',  // Corporate Finance
+      'özel sermaye',        // Private Equity
     ],
   },
 
@@ -139,6 +184,28 @@ const FAMILIES = [
       'communications manager',
       'public relations',
       'campaign manager',
+      // Turkish Credit/Marketing titles
+      'kredi analisti',       // Credit Analyst
+      'kredi riski',          // Credit Risk
+      'kredi yöneticisi',     // Credit Manager
+      'kredi yönetmeni',
+      'kredi tahsis',         // Credit Allocation
+      'kredi değerlendirme',
+      'krediler',
+      'ticari kredi',
+      'bireysel kredi',
+      'ipotek',               // Mortgage
+      'konut kredisi',
+      'kurumsal bankacılık',  // Corporate Banking
+      'ticari bankacılık',    // Commercial Banking
+      'kurumsal pazarlama',
+      'pazarlama müdürü',
+      'pazarlama yöneticisi',
+      'ürün yöneticisi',      // Product Manager (marketing context)
+      'marka yöneticisi',     // Brand Manager
+      'dijital pazarlama',    // Digital Marketing
+      'kampanya yöneticisi',
+      'müşteri segmentasyonu',
     ],
   },
 
@@ -176,6 +243,33 @@ const FAMILIES = [
       'strategy',
       'corporate strategy',
       'management consultant',
+      // Turkish Legal/Audit/HR titles — Müfettiş burada çünkü iç denetim/teftiş
+      'müfettiş',            // Inspector → Internal Audit
+      'başmüfettiş',         // Chief Inspector
+      'teftiş',              // Inspection/Audit department
+      'iç denetim',          // Internal Audit
+      'iç denetçi',
+      'denetçi',             // Auditor
+      'iç kontrol',          // Internal Control
+      'uyum',                // Compliance
+      'uyum yöneticisi',
+      'hukuk',               // Legal
+      'hukuk müşaviri',      // Legal Counsel
+      'avukat',              // Attorney
+      'risk yönetimi',       // Risk Management
+      'operasyonel risk',    // Operational Risk
+      'mevzuat',             // Regulatory
+      'regülasyon',
+      'insan kaynakları',    // Human Resources
+      'i̇nsan kaynakları',
+      'ik müdürü',
+      'yetenek yönetimi',    // Talent Management
+      'işe alım',            // Recruitment
+      'eğitim ve gelişim',   // L&D
+      'idari işler',         // Administrative
+      'satın alma',          // Procurement
+      'strateji',            // Strategy
+      'kurumsal strateji',
     ],
   },
 
@@ -196,6 +290,15 @@ const FAMILIES = [
       'program manager',
       'change management',
       'transformation',
+      // Turkish HQ Ops titles
+      'operasyon müdürü',    // Operations Manager
+      'operasyon yöneticisi',
+      'süreç yönetimi',      // Process Management
+      'süreç iyileştirme',   // Process Improvement
+      'proje yöneticisi',    // Project Manager
+      'program yöneticisi',
+      'değişim yönetimi',    // Change Management
+      'merkezi operasyon',   // Central Operations
     ],
   },
 
@@ -217,6 +320,19 @@ const FAMILIES = [
       'branch sales',
       'insurance advisor',
       'bancassurance',
+      // Turkish Branch Sales titles
+      'müşteri ilişkileri yöneticisi', // Relationship Manager
+      'müşteri ilişkileri yönetmeni',
+      'müşteri temsilcisi',            // Customer Representative (sales)
+      'bireysel bankacılık danışmanı', // Retail Banking Advisor
+      'özel bankacılık',               // Private Banking
+      'özel bankacı',
+      'finansal danışman',             // Financial Advisor
+      'yatırım danışmanı',             // Investment Advisor
+      'portföy danışmanı',             // Portfolio Advisor (branch-level)
+      'sigorta danışmanı',             // Insurance Advisor
+      'konut kredisi danışmanı',       // Mortgage Advisor
+      'satış uzmanı',                  // Sales Specialist
     ],
   },
 
@@ -233,6 +349,16 @@ const FAMILIES = [
       'customer service',
       'service officer',
       'back office',
+      // Turkish Branch Ops titles
+      'şube müdürü',         // Branch Manager
+      'şube operasyon',      // Branch Operations
+      'şube yöneticisi',
+      'veznedar',            // Teller
+      'kasiyer',             // Cashier
+      'müşteri hizmetleri',  // Customer Service
+      'gişe yetkilisi',      // Counter Officer
+      'arka ofis',           // Back Office
+      'operasyon yetkilisi', // Operations Officer (branch)
     ],
   },
 ];
@@ -245,6 +371,7 @@ const SENIORITY_LEVELS = [
   {
     level: 'exec',
     keywords: [
+      // English
       'chief', 'ceo', 'cto', 'cio', 'cfo', 'coo', 'cro',
       'managing director', 'md',
       'executive vice president', 'evp',
@@ -253,35 +380,51 @@ const SENIORITY_LEVELS = [
       'director',
       'head of',
       'head,',
+      // Turkish exec
+      'genel müdür',              // General Manager / CEO
+      'genel müdür yardımcısı',   // Deputy GM
+      'başkan',                   // President / Chairman
+      'yönetim kurulu',           // Board Member
+      'icra kurulu',              // Executive Board
+      'grup başkanı',             // Group Head
+      'bölüm başkanı',            // Division Head
+      'direktör',                 // Director
+      'baş mühendis',             // Chief Engineer (space prevents matching 'başmüfettiş')
+      'baş ekonomist',
+      'baş analist',
     ],
   },
   {
     level: 'senior',
     keywords: [
-      'senior',
-      'sr.',
-      'sr ',
-      'lead',
-      'principal',
-      'manager',
-      'supervisor',
-      'team lead',
-      'specialist',
+      // English
+      'senior', 'sr.', 'sr ', 'lead', 'principal',
+      'manager', 'supervisor', 'team lead', 'specialist',
+      // Turkish senior
+      'kıdemli',      // Senior
+      'müdür',        // Manager (almost always senior level in TR banks)
+      'yönetici',     // Manager/Executive (mid-exec range)
+      'yönetmen',     // Manager variant
+      'uzman',        // Specialist/Expert
+      'başuzman',     // Senior Specialist
+      'sorumlu',      // In-charge / Responsible
+      'şef',          // Chief/Supervisor (team level)
+      'başmüfettiş',  // Chief Inspector (compound word, not C-suite)
+      'başdenetçi',   // Chief Auditor (compound)
     ],
   },
   {
     level: 'junior',
     keywords: [
-      'junior',
-      'jr.',
-      'jr ',
-      'associate',
-      'graduate',
-      'intern',
-      'trainee',
-      'entry level',
-      'entry-level',
-      'apprentice',
+      // English
+      'junior', 'jr.', 'jr ', 'associate', 'graduate',
+      'intern', 'trainee', 'entry level', 'entry-level', 'apprentice',
+      // Turkish junior
+      'stajyer',      // Intern
+      'asistan',      // Assistant
+      'yardımcı',     // Assistant/Deputy (junior connotation)
+      'memur',        // Clerk (entry-level in Turkish banks)
+      'personel',     // Staff (generic entry-level)
     ],
   },
 ];
@@ -292,11 +435,17 @@ const SENIORITY_LEVELS = [
 
 /**
  * Checks whether a normalized title contains a keyword.
- * For single-word keywords (acronyms like 'cto', 'cio') uses word boundaries
- * to avoid false substring matches (e.g. 'cto' inside 'director').
+ *
+ * Uses regex \b word boundaries ONLY for short pure-ASCII acronyms (≤4 chars,
+ * no spaces, only [a-z0-9]). This prevents 'cto' matching inside 'director'
+ * while avoiding broken boundaries for Turkish characters (JS \w is ASCII-only,
+ * so \b breaks on 'ö', 'ş', 'ü', etc. and on Turkish morphological suffixes
+ * like 'yönetmeni' vs keyword 'yönetmen').
  */
 function titleIncludes(normalizedTitle, keyword) {
-  if (!keyword.includes(' ')) {
+  const isShortAsciiAcronym =
+    keyword.length <= 4 && !keyword.includes(' ') && /^[a-z0-9]+$/.test(keyword);
+  if (isShortAsciiAcronym) {
     return new RegExp(`\\b${keyword}\\b`).test(normalizedTitle);
   }
   return normalizedTitle.includes(keyword);
@@ -311,7 +460,12 @@ function mapTitleToBusinessFamily(title) {
     return { businessFamily: 'Legal/Other', departmentType: 'HQ', seniorityLevel: 'mid' };
   }
 
-  const normalized = title.toLowerCase().trim();
+  // Replace Turkish dotted-I (İ, U+0130) with plain 'i' BEFORE toLowerCase().
+  // This fixes the JS default behavior where "İ".toLowerCase() = "i̇"
+  // (two codepoints: i + combining dot), breaking keyword matches.
+  // We do NOT use toLocaleLowerCase('tr') because that maps English 'I' → 'ı'
+  // (dotless i), which breaks English keywords like 'information' → 'ınformation'.
+  const normalized = title.replace(/İ/g, 'i').toLowerCase().trim();
   const isBranchRole = BRANCH_SIGNALS.some((sig) => titleIncludes(normalized, sig));
 
   // Find best matching family

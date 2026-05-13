@@ -90,6 +90,51 @@ describe('mapTitleToBusinessFamily', () => {
     expect(result.seniorityLevel).toBe(seniority);
   });
 
+  // --- Turkish titles (critical for TR banking market) ---
+  test.each([
+    // IT
+    ['Yazılım Mühendisi', 'IT', 'HQ', 'mid'],
+    ['Kıdemli Veri Bilimci', 'IT', 'HQ', 'senior'],
+    ['Siber Güvenlik Uzmanı', 'IT', 'HQ', 'senior'],
+    ['Bilgi İşlem Müdürü', 'IT', 'HQ', 'senior'],
+    ['Dijital Dönüşüm Direktörü', 'IT', 'HQ', 'exec'],
+    // Treasury/Finance
+    ['Portföy Yönetmeni', 'Treasury/Finance', 'HQ', 'senior'],
+    ['Hazine Müdürü', 'Treasury/Finance', 'HQ', 'senior'],
+    ['Kıdemli Finansal Analist', 'Treasury/Finance', 'HQ', 'senior'],
+    ['Sermaye Piyasaları Uzmanı', 'Treasury/Finance', 'HQ', 'senior'],
+    // Credit/Mkt
+    ['Kredi Analisti', 'Credit/Mkt', 'HQ', 'mid'],
+    ['Kıdemli Kredi Yöneticisi', 'Credit/Mkt', 'HQ', 'senior'],
+    ['Pazarlama Müdürü', 'Credit/Mkt', 'HQ', 'senior'],
+    ['Kurumsal Bankacılık Direktörü', 'Credit/Mkt', 'HQ', 'exec'],
+    // Legal/Other — Müfettiş is the critical one
+    ['Müfettiş', 'Legal/Other', 'HQ', 'mid'],
+    ['Başmüfettiş', 'Legal/Other', 'HQ', 'senior'],
+    ['İç Denetçi', 'Legal/Other', 'HQ', 'mid'],
+    ['Uyum Yöneticisi', 'Legal/Other', 'HQ', 'senior'],
+    ['Hukuk Müşaviri', 'Legal/Other', 'HQ', 'mid'],
+    ['İnsan Kaynakları Müdürü', 'Legal/Other', 'HQ', 'senior'],
+    // Branch Sales
+    ['Müşteri İlişkileri Yöneticisi', 'Sales/Mkt', 'Branch', 'senior'],
+    ['Bireysel Bankacılık Danışmanı', 'Sales/Mkt', 'Branch', 'mid'],
+    ['Özel Bankacı', 'Sales/Mkt', 'Branch', 'mid'],
+    ['Finansal Danışman', 'Sales/Mkt', 'Branch', 'mid'],
+    // Branch Ops
+    ['Şube Müdürü', 'Ops', 'Branch', 'senior'],
+    ['Veznedar', 'Ops', 'Branch', 'mid'],
+    ['Müşteri Hizmetleri Personeli', 'Ops', 'Branch', 'junior'],
+    // Turkish seniority
+    ['Kıdemli Müfettiş', 'Legal/Other', 'HQ', 'senior'],
+    ['Genel Müdür', 'Legal/Other', 'HQ', 'exec'],
+    ['Stajyer Yazılım Geliştirici', 'IT', 'HQ', 'junior'],
+  ])('TR: %s → %s / %s / %s', (title, family, dept, seniority) => {
+    const result = mapTitleToBusinessFamily(title);
+    expect(result.businessFamily).toBe(family);
+    expect(result.departmentType).toBe(dept);
+    expect(result.seniorityLevel).toBe(seniority);
+  });
+
   // --- Edge cases ---
   test('empty string falls back to Legal/Other HQ', () => {
     expect(mapTitleToBusinessFamily('').businessFamily).toBe('Legal/Other');
