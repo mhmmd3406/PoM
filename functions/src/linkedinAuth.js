@@ -77,23 +77,44 @@ async function getOrCreateFirebaseUser(linkedinHash, headline) {
   }
 }
 
+const MOBILE_CALLBACK_SCHEME = 'com.pom.app';
+
 /**
- * Main handler: LinkedIn OAuth callback → Firebase custom token.
+ * Redirects to the mobile deep-link with the result encoded as query params.
+ * FlutterWebAuth2 captures this redirect and returns the URL to the app.
+ */
+function redirectToApp(res, params) {
+  const url = new URL(`${MOBILE_CALLBACK_SCHEME}://callback`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+  return res.redirect(302, url.toString());
+}
+
+/**
+ * Main handler: LinkedIn OAuth callback → mobile deep-link redirect.
  *
  * GET /linkedinCallback?code=...&state=...
  *
- * Returns JSON: { customToken, isNewUser, linkedinHash }
+ * On success:  redirects → com.pom.app://callback?customToken=...&isNewUser=...&state=...
+ * On cancel:   redirects → com.pom.app://callback?error=access_denied&error_description=...
+ * On failure:  redirects → com.pom.app://callback?error=<code>
  */
 async function handleLinkedInCallback(req, res) {
-  const { code, state } = req.query;
+  const { code, state, error, error_description } = req.query;
 
-  if (!code) {
-    return res.status(400).json({ error: 'missing_code' });
+  // LinkedIn sends error=access_denied when user cancels
+  if (error) {
+    return redirectToApp(res, {
+      error,
+      error_description: error_description || 'Login was cancelled or denied.',
+    });
   }
 
-  // Validate CSRF state token (client generates and stores this)
+  if (!code) {
+    return redirectToApp(res, { error: 'missing_code' });
+  }
+
   if (!state || state.length < 8) {
-    return res.status(400).json({ error: 'invalid_state' });
+    return redirectToApp(res, { error: 'invalid_state' });
   }
 
   let accessToken;
@@ -101,7 +122,7 @@ async function handleLinkedInCallback(req, res) {
     accessToken = await exchangeCode(code);
   } catch (err) {
     console.error('LinkedIn token exchange failed:', err.response?.data || err.message);
-    return res.status(502).json({ error: 'linkedin_token_exchange_failed' });
+    return redirectToApp(res, { error: 'linkedin_token_exchange_failed' });
   }
 
   let profile;
@@ -109,7 +130,7 @@ async function handleLinkedInCallback(req, res) {
     profile = await fetchLinkedInProfile(accessToken);
   } catch (err) {
     console.error('LinkedIn profile fetch failed:', err.response?.data || err.message);
-    return res.status(502).json({ error: 'linkedin_profile_fetch_failed' });
+    return redirectToApp(res, { error: 'linkedin_profile_fetch_failed' });
   }
 
   const linkedinHash = hashLinkedInId(profile.linkedinId);
@@ -122,7 +143,7 @@ async function handleLinkedInCallback(req, res) {
     firebaseUser = await getOrCreateFirebaseUser(linkedinHash, profile.headline);
   } catch (err) {
     console.error('Firebase user creation failed:', err.message);
-    return res.status(500).json({ error: 'firebase_user_error' });
+    return redirectToApp(res, { error: 'firebase_user_error' });
   }
 
   const customToken = await admin.auth().createCustomToken(firebaseUser.uid, {
@@ -130,7 +151,7 @@ async function handleLinkedInCallback(req, res) {
     headline: profile.headline.slice(0, 256),
   });
 
-  return res.json({ customToken, isNewUser, linkedinHash });
+  return redirectToApp(res, { customToken, isNewUser, state });
 }
 
 // Exported for index.js to declare secrets on the HTTP trigger

@@ -5,7 +5,8 @@ const admin = require('firebase-admin');
 const { defineSecret } = require('firebase-functions/params');
 
 // Secret Manager — value injected at runtime, never in source
-const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
+const stripeSecretKey    = defineSecret('STRIPE_SECRET_KEY');
+const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
 
 /**
  * Creates a Stripe PaymentIntent for a PoM session purchase.
@@ -108,9 +109,8 @@ exports.confirmPurchase = functions
 exports.stripeWebhook = functions
   .runWith({ secrets: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] })
   .https.onRequest(async (req, res) => {
-    const { defineSecret: ds } = require('firebase-functions/params');
-    const webhookSecret = ds('STRIPE_WEBHOOK_SECRET').value();
     const stripe = require('stripe')(stripeSecretKey.value());
+    const webhookSecret = stripeWebhookSecret.value();
 
     let event;
     try {
