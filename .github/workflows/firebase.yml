@@ -39,6 +39,16 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Integration tests (Firestore rules via emulator)
+        run: |
+          firebase emulators:exec \
+            --only firestore \
+            --project pom-test \
+            "npm run test:integration"
+
   deploy:
     name: Deploy Firestore Rules + Functions
     runs-on: ubuntu-latest
