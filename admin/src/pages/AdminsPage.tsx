@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { httpsCallable } from 'firebase/functions'
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore'
 import { db, functions } from '../firebase'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../hooks/useAuth'
@@ -142,12 +142,8 @@ function RemoveAdminModal({ admin, onClose, onRemoved }: RemoveModalProps) {
     setLoading(true)
     setError(null)
     try {
-      // We call a custom Cloud Function wrapper — in production you'd have
-      // a `removeAdminClaim` function. Here we use updateDoc to clear is_admin flag
-      // since setAdminClaim only adds. We update the users collection as a signal.
-      const { doc, updateDoc } = await import('firebase/firestore')
       // Mark in users doc — the actual claim removal requires a Cloud Function
-      // For now we update the users doc and note this requires server-side removal
+      // since setAdminClaim only adds. This acts as a server-side signal.
       await updateDoc(doc(db, 'users', admin.uid), { is_admin_pending_removal: true })
       onRemoved()
       onClose()
