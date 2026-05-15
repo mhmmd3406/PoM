@@ -1,9 +1,13 @@
 /**
  * PoM (Peace of Mind) — Firebase Cloud Functions
  * B2B Employee Wellbeing Platform
+ *
+ * Uses firebase-functions v6 (gen2 API) with firebase-admin v12 and Stripe v17.
  */
 
-import * as functions from "firebase-functions";
+import { onCall, onRequest, CallableRequest, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { logger } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 import axios from "axios";
 import * as crypto from "crypto";
@@ -20,9 +24,9 @@ const db = admin.firestore();
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe {
   if (!_stripe) {
-    const secret = functions.config().stripe?.secret_key ?? process.env.STRIPE_SECRET_KEY ?? "";
-    if (!secret) throw new functions.https.HttpsError("failed-precondition", "Stripe secret key not configured");
-    _stripe = new Stripe(secret, { apiVersion: "2024-06-20" });
+    const secret = process.env.STRIPE_SECRET_KEY ?? "";
+    if (!secret) throw new HttpsError("failed-precondition", "Stripe secret key not configured");
+    _stripe = new Stripe(secret, { apiVersion: "2025-02-24.acacia" });
   }
   return _stripe;
 }
@@ -49,10 +53,10 @@ async function cachedRead(key: string, fetcher: () => Promise<unknown>): Promise
 /** LinkedIn OAuth config */
 function linkedinConfig() {
   return {
-    clientId: functions.config().linkedin?.client_id ?? process.env.LINKEDIN_CLIENT_ID ?? "",
-    clientSecret: functions.config().linkedin?.client_secret ?? process.env.LINKEDIN_CLIENT_SECRET ?? "",
-    redirectUri: functions.config().linkedin?.redirect_uri ?? process.env.LINKEDIN_REDIRECT_URI ?? "https://app.pom.app/auth/callback",
-    hmacSecret: functions.config().linkedin?.hmac_secret ?? process.env.LINKEDIN_HMAC_SECRET ?? "pom-linkedin-hmac-secret",
+    clientId: process.env.LINKEDIN_CLIENT_ID ?? "",
+    clientSecret: process.env.LINKEDIN_CLIENT_SECRET ?? "",
+    redirectUri: process.env.LINKEDIN_REDIRECT_URI ?? "https://app.pom.app/auth/callback",
+    hmacSecret: process.env.LINKEDIN_HMAC_SECRET ?? "pom-linkedin-hmac-secret",
   };
 }
 
@@ -95,162 +99,174 @@ function avg(values: number[]): number | null {
 // 1. linkedinAuth — HTTPS Callable
 // ---------------------------------------------------------------------------
 
-export const linkedinAuth = functions.https.onCall(async (data: { code: string; codeVerifier: string }) => {
-  const { code, codeVerifier } = data;
-  if (!code || !codeVerifier) {
-    throw new functions.https.HttpsError("invalid-argument", "code and codeVerifier are required");
-  }
+export const linkedinAuth = onCall(
+  async (request: CallableRequest<{ code: string; codeVerifier: string }>) => {
+    const { code, codeVerifier } = request.data;
+    if (!code || !codeVerifier) {
+      throw new HttpsError("invalid-argument", "code and codeVerifier are required");
+    }
 
-  const cfg = linkedinConfig();
+    const cfg = linkedinConfig();
 
-  // Exchange authorisation code for access token
-  let accessToken: string;
-  try {
-    const tokenResp = await axios.post(
-      "https://www.linkedin.com/oauth/v2/accessToken",
-      new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: cfg.redirectUri,
-        client_id: cfg.clientId,
-        client_secret: cfg.clientSecret,
-        code_verifier: codeVerifier,
-      }),
-      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-    );
-    accessToken = tokenResp.data.access_token as string;
-  } catch (err: unknown) {
-    functions.logger.error("LinkedIn token exchange failed", err);
-    throw new functions.https.HttpsError("unauthenticated", "LinkedIn token exchange failed");
-  }
+    // Exchange authorisation code for access token
+    let accessToken: string;
+    try {
+      const tokenResp = await axios.post(
+        "https://www.linkedin.com/oauth/v2/accessToken",
+        new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: cfg.redirectUri,
+          client_id: cfg.clientId,
+          client_secret: cfg.clientSecret,
+          code_verifier: codeVerifier,
+        }),
+        { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+      );
+      accessToken = tokenResp.data.access_token as string;
+    } catch (err: unknown) {
+      logger.error("LinkedIn token exchange failed", err);
+      throw new HttpsError("unauthenticated", "LinkedIn token exchange failed");
+    }
 
-  // Fetch LinkedIn profile (lite profile + email)
-  let profile: {
-    id: string;
-    localizedFirstName: string;
-    localizedLastName: string;
-    profilePicture?: { displayImage: string };
-  };
-  try {
-    const profileResp = await axios.get("https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    profile = profileResp.data;
-  } catch (err: unknown) {
-    functions.logger.error("LinkedIn profile fetch failed", err);
-    throw new functions.https.HttpsError("unauthenticated", "Could not fetch LinkedIn profile");
-  }
+    // Fetch LinkedIn lite profile
+    let profile: {
+      id: string;
+      localizedFirstName: string;
+      localizedLastName: string;
+      profilePicture?: { displayImage: string };
+    };
+    try {
+      const profileResp = await axios.get(
+        "https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))",
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      profile = profileResp.data;
+    } catch (err: unknown) {
+      logger.error("LinkedIn profile fetch failed", err);
+      throw new HttpsError("unauthenticated", "Could not fetch LinkedIn profile");
+    }
 
-  const linkedinHash = hashLinkedinId(profile.id, cfg.hmacSecret);
+    const linkedinHash = hashLinkedinId(profile.id, cfg.hmacSecret);
 
-  // Check for existing user by linkedin_hash
-  const usersSnap = await db.collection("users").where("linkedin_hash", "==", linkedinHash).limit(1).get();
+    // Check for existing user by linkedin_hash
+    const usersSnap = await db
+      .collection("users")
+      .where("linkedin_hash", "==", linkedinHash)
+      .limit(1)
+      .get();
 
-  let uid: string;
-  let isNewUser: boolean;
+    let uid: string;
+    let isNewUser: boolean;
 
-  if (!usersSnap.empty) {
-    // Existing user
-    uid = usersSnap.docs[0].id;
-    isNewUser = false;
-    functions.logger.info("Existing LinkedIn user signed in", { uid });
-  } else {
-    // New user — create Firebase Auth user
-    const authUser = await admin.auth().createUser({
-      displayName: `${profile.localizedFirstName} ${profile.localizedLastName}`,
-    });
-    uid = authUser.uid;
-    isNewUser = true;
+    if (!usersSnap.empty) {
+      // Existing user
+      uid = usersSnap.docs[0].id;
+      isNewUser = false;
+      logger.info("Existing LinkedIn user signed in", { uid });
+    } else {
+      // New user — create Firebase Auth user
+      const authUser = await admin.auth().createUser({
+        displayName: `${profile.localizedFirstName} ${profile.localizedLastName}`,
+      });
+      uid = authUser.uid;
+      isNewUser = true;
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    const batch = db.batch();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const batch = db.batch();
 
-    // User document
-    batch.set(db.collection("users").doc(uid), {
-      uid,
-      linkedin_hash: linkedinHash,
-      displayName: `${profile.localizedFirstName} ${profile.localizedLastName}`,
-      firstName: profile.localizedFirstName,
-      lastName: profile.localizedLastName,
-      avatar: null,
+      // User document
+      batch.set(db.collection("users").doc(uid), {
+        uid,
+        linkedin_hash: linkedinHash,
+        displayName: `${profile.localizedFirstName} ${profile.localizedLastName}`,
+        firstName: profile.localizedFirstName,
+        lastName: profile.localizedLastName,
+        avatar: null,
+        role: "free",
+        companyId: null,
+        department: null,
+        kvkk_accepted: false,
+        kvkk_version: null,
+        created_at: now,
+        updated_at: now,
+        deleted: false,
+      });
+
+      // Wallet — 0 credits
+      batch.set(db.collection("wallets").doc(uid), {
+        userId: uid,
+        credits: 0,
+        total_purchased: 0,
+        created_at: now,
+        updated_at: now,
+      });
+
+      // Subscription — free tier
+      batch.set(db.collection("subscriptions").doc(uid), {
+        userId: uid,
+        plan: "free",
+        status: "active",
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+        current_period_end: null,
+        created_at: now,
+        updated_at: now,
+      });
+
+      await batch.commit();
+      logger.info("New LinkedIn user created", { uid });
+    }
+
+    // Set custom claims on the Firebase Auth user record
+    await admin.auth().setCustomUserClaims(uid, {
       role: "free",
-      companyId: null,
-      department: null,
-      kvkk_accepted: false,
-      kvkk_version: null,
-      created_at: now,
-      updated_at: now,
-      deleted: false,
+      is_admin: false,
+      linkedin_hash: linkedinHash,
     });
 
-    // Wallet — 0 credits
-    batch.set(db.collection("wallets").doc(uid), {
-      userId: uid,
-      credits: 0,
-      total_purchased: 0,
-      created_at: now,
-      updated_at: now,
+    // Create Firebase custom token (claims embedded for immediate use)
+    const customToken = await admin.auth().createCustomToken(uid, {
+      role: "free",
+      is_admin: false,
+      linkedin_hash: linkedinHash,
     });
 
-    // Subscription — free tier
-    batch.set(db.collection("subscriptions").doc(uid), {
-      userId: uid,
-      plan: "free",
-      status: "active",
-      stripe_customer_id: null,
-      stripe_subscription_id: null,
-      current_period_end: null,
-      created_at: now,
-      updated_at: now,
-    });
-
-    await batch.commit();
-    functions.logger.info("New LinkedIn user created", { uid });
+    return { customToken, isNewUser };
   }
-
-  // Set custom claims
-  await admin.auth().setCustomUserClaims(uid, {
-    role: "free",
-    is_admin: false,
-    linkedin_hash: linkedinHash,
-  });
-
-  // Create Firebase custom token
-  const customToken = await admin.auth().createCustomToken(uid, {
-    role: "free",
-    is_admin: false,
-    linkedin_hash: linkedinHash,
-  });
-
-  return { customToken, isNewUser };
-});
+);
 
 // ---------------------------------------------------------------------------
 // 2. createPaymentIntent — HTTPS Callable (Auth required)
 // ---------------------------------------------------------------------------
 
-export const createPaymentIntent = functions.https.onCall(
-  async (data: { amount: number; currency: string; creditAmount: number }, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "Authentication required");
+export const createPaymentIntent = onCall(
+  async (
+    request: CallableRequest<{ amount: number; currency: string; creditAmount: number }>
+  ) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required");
     }
-    const { amount, currency, creditAmount } = data;
+
+    const { amount, currency, creditAmount } = request.data;
     if (!amount || amount <= 0) {
-      throw new functions.https.HttpsError("invalid-argument", "amount must be a positive number");
+      throw new HttpsError("invalid-argument", "amount must be a positive number");
     }
     if (!currency) {
-      throw new functions.https.HttpsError("invalid-argument", "currency is required");
+      throw new HttpsError("invalid-argument", "currency is required");
     }
     if (!creditAmount || creditAmount <= 0) {
-      throw new functions.https.HttpsError("invalid-argument", "creditAmount must be a positive number");
+      throw new HttpsError("invalid-argument", "creditAmount must be a positive number");
     }
 
     const stripe = getStripe();
-    const uid = context.auth.uid;
+    const uid = request.auth.uid;
 
     // Fetch or create Stripe customer
     const subDoc = await db.collection("subscriptions").doc(uid).get();
-    let stripeCustomerId: string | null = subDoc.exists ? (subDoc.data()?.stripe_customer_id ?? null) : null;
+    let stripeCustomerId: string | null = subDoc.exists
+      ? (subDoc.data()?.stripe_customer_id ?? null)
+      : null;
 
     if (!stripeCustomerId) {
       const userDoc = await db.collection("users").doc(uid).get();
@@ -259,7 +275,10 @@ export const createPaymentIntent = functions.https.onCall(
         name: userDoc.data()?.displayName ?? undefined,
       });
       stripeCustomerId = customer.id;
-      await db.collection("subscriptions").doc(uid).set({ stripe_customer_id: stripeCustomerId }, { merge: true });
+      await db
+        .collection("subscriptions")
+        .doc(uid)
+        .set({ stripe_customer_id: stripeCustomerId }, { merge: true });
     }
 
     const paymentIntent = await stripe.paymentIntents.create({
@@ -288,30 +307,38 @@ export const createPaymentIntent = functions.https.onCall(
 // 3. createSubscription — HTTPS Callable (Auth required)
 // ---------------------------------------------------------------------------
 
-export const createSubscription = functions.https.onCall(
-  async (data: { planId: "pro" | "enterprise" }, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "Authentication required");
+export const createSubscription = onCall(
+  async (request: CallableRequest<{ planId: "pro" | "enterprise" }>) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required");
     }
-    const { planId } = data;
+
+    const { planId } = request.data;
     if (!["pro", "enterprise"].includes(planId)) {
-      throw new functions.https.HttpsError("invalid-argument", "planId must be 'pro' or 'enterprise'");
+      throw new HttpsError("invalid-argument", "planId must be 'pro' or 'enterprise'");
     }
 
     const stripe = getStripe();
-    const uid = context.auth.uid;
+    const uid = request.auth.uid;
 
     // Load stripe plan config from Firestore
     const plansDoc = await db.collection("platform_config").doc("stripe_plans").get();
-    const plans = plansDoc.data() as Record<string, { price_id: string; amount: number; currency: string }> | undefined;
+    const plans = plansDoc.data() as
+      | Record<string, { price_id: string; amount: number; currency: string }>
+      | undefined;
     const plan = plans?.[planId];
     if (!plan?.price_id || plan.price_id === "price_REPLACE_ME") {
-      throw new functions.https.HttpsError("failed-precondition", `Stripe price ID for plan '${planId}' is not configured`);
+      throw new HttpsError(
+        "failed-precondition",
+        `Stripe price ID for plan '${planId}' is not configured`
+      );
     }
 
     // Fetch or create Stripe customer
     const subDoc = await db.collection("subscriptions").doc(uid).get();
-    let stripeCustomerId: string | null = subDoc.exists ? (subDoc.data()?.stripe_customer_id ?? null) : null;
+    let stripeCustomerId: string | null = subDoc.exists
+      ? (subDoc.data()?.stripe_customer_id ?? null)
+      : null;
 
     if (!stripeCustomerId) {
       const userDoc = await db.collection("users").doc(uid).get();
@@ -354,10 +381,9 @@ export const createSubscription = functions.https.onCall(
 // 4. stripeWebhook — HTTPS (public, validates Stripe signature)
 // ---------------------------------------------------------------------------
 
-export const stripeWebhook = functions.https.onRequest(async (req, res) => {
+export const stripeWebhook = onRequest(async (req, res) => {
   const stripe = getStripe();
-  const webhookSecret =
-    functions.config().stripe?.webhook_secret ?? process.env.STRIPE_WEBHOOK_SECRET ?? "";
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
 
   const sig = req.headers["stripe-signature"] as string;
   let event: Stripe.Event;
@@ -365,12 +391,12 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
   try {
     event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
   } catch (err: unknown) {
-    functions.logger.warn("Stripe webhook signature verification failed", err);
+    logger.warn("Stripe webhook signature verification failed", { err });
     res.status(400).send("Webhook signature verification failed");
     return;
   }
 
-  functions.logger.info("Stripe webhook received", { type: event.type });
+  logger.info("Stripe webhook received", { type: event.type });
 
   try {
     switch (event.type) {
@@ -379,14 +405,17 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
         const uid = pi.metadata?.firebase_uid;
         const creditAmount = parseInt(pi.metadata?.credit_amount ?? "0", 10);
         if (uid && creditAmount > 0) {
-          await db.collection("wallets").doc(uid).set(
-            {
-              credits: admin.firestore.FieldValue.increment(creditAmount),
-              total_purchased: admin.firestore.FieldValue.increment(creditAmount),
-              updated_at: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          );
+          await db
+            .collection("wallets")
+            .doc(uid)
+            .set(
+              {
+                credits: admin.firestore.FieldValue.increment(creditAmount),
+                total_purchased: admin.firestore.FieldValue.increment(creditAmount),
+                updated_at: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
           // Mark transaction as succeeded
           const txSnap = await db
             .collection("transactions")
@@ -396,7 +425,7 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
           if (!txSnap.empty) {
             await txSnap.docs[0].ref.update({ status: "succeeded" });
           }
-          functions.logger.info("Credits added to wallet", { uid, creditAmount });
+          logger.info("Credits added to wallet", { uid, creditAmount });
         }
         break;
       }
@@ -407,9 +436,16 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
         const uid = sub.metadata?.firebase_uid;
         if (!uid) break;
 
-        const planId = (sub.items.data[0]?.price?.metadata?.plan_id ?? sub.metadata?.plan_id ?? "free") as string;
+        const planId = (
+          sub.items.data[0]?.price?.metadata?.plan_id ??
+          sub.metadata?.plan_id ??
+          "free"
+        ) as string;
         const status = sub.status;
-        const currentPeriodEnd = new Date((sub as unknown as { current_period_end: number }).current_period_end * 1000);
+        // current_period_end is a Unix timestamp in seconds
+        const periodEndSeconds = (sub as unknown as { current_period_end: number })
+          .current_period_end;
+        const currentPeriodEnd = new Date(periodEndSeconds * 1000);
 
         await db.collection("subscriptions").doc(uid).set(
           {
@@ -422,7 +458,7 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
           { merge: true }
         );
 
-        // Update custom claims if subscription is active
+        // Update custom claims when subscription becomes active
         if (status === "active") {
           await admin.auth().setCustomUserClaims(uid, {
             role: planId,
@@ -430,7 +466,7 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
           });
         }
 
-        functions.logger.info("Subscription updated in Firestore", { uid, planId, status });
+        logger.info("Subscription updated in Firestore", { uid, planId, status });
         break;
       }
 
@@ -455,15 +491,15 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
           is_admin: false,
         });
 
-        functions.logger.info("Subscription canceled, downgraded to free", { uid });
+        logger.info("Subscription canceled, downgraded to free", { uid });
         break;
       }
 
       default:
-        functions.logger.info("Unhandled Stripe webhook event", { type: event.type });
+        logger.info("Unhandled Stripe webhook event", { type: event.type });
     }
   } catch (err: unknown) {
-    functions.logger.error("Error processing Stripe webhook", err);
+    logger.error("Error processing Stripe webhook", { err });
     res.status(500).send("Internal error processing webhook");
     return;
   }
@@ -475,12 +511,12 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
 // 5. deleteAccount — HTTPS Callable (Auth required)
 // ---------------------------------------------------------------------------
 
-export const deleteAccount = functions.https.onCall(async (_data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
+export const deleteAccount = onCall(async (request: CallableRequest<unknown>) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
   }
 
-  const uid = context.auth.uid;
+  const uid = request.auth.uid;
   const timestamp = Date.now();
 
   // Anonymise user document — keep record for aggregate stats
@@ -495,11 +531,11 @@ export const deleteAccount = functions.https.onCall(async (_data, context) => {
     updated_at: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  // Delete Firebase Auth user and revoke all tokens
+  // Revoke tokens then delete the Auth user
   await admin.auth().revokeRefreshTokens(uid);
   await admin.auth().deleteUser(uid);
 
-  functions.logger.info("Account deleted and anonymised", { uid });
+  logger.info("Account deleted and anonymised", { uid });
   return { success: true };
 });
 
@@ -507,17 +543,21 @@ export const deleteAccount = functions.https.onCall(async (_data, context) => {
 // 6. computeInsights — Firestore trigger on checkin create
 // ---------------------------------------------------------------------------
 
-export const computeInsights = functions.firestore
-  .document("checkins/{checkinId}")
-  .onCreate(async (snap) => {
-    const checkin = snap.data() as {
-      userId: string;
-      companyId?: string;
-      department?: string;
-      scores: Record<string, number>;
-      created_at: admin.firestore.Timestamp;
-    };
+type CheckinDoc = {
+  userId: string;
+  companyId?: string;
+  department?: string;
+  scores: Record<string, number>;
+  created_at: admin.firestore.Timestamp;
+};
 
+export const computeInsights = onDocumentCreated(
+  "checkins/{checkinId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const checkin = snap.data() as CheckinDoc;
     const { userId, companyId, department, scores } = checkin;
     if (!userId) return;
 
@@ -531,31 +571,35 @@ export const computeInsights = functions.firestore
     const companyMinN = safeThresholds.company_min_n;
     const deptMinN = safeThresholds.department_min_n;
 
-    // Fetch all user check-ins for personal stats
+    // Fetch all user check-ins for personal stats (ordered asc for trend)
     const userCheckinsSnap = await db
       .collection("checkins")
       .where("userId", "==", userId)
       .orderBy("created_at", "asc")
       .get();
 
-    const userCheckins = userCheckinsSnap.docs.map((d) => d.data() as typeof checkin);
+    const userCheckins = userCheckinsSnap.docs.map((d) => d.data() as CheckinDoc);
     const dimensions = Object.keys(scores);
 
     // Personal averages
     const personalAvg: Record<string, number> = {};
     for (const dim of dimensions) {
-      const vals = userCheckins.map((c) => c.scores?.[dim] ?? null).filter((v): v is number => v !== null);
+      const vals = userCheckins
+        .map((c) => c.scores?.[dim] ?? null)
+        .filter((v): v is number => v !== null);
       const a = avg(vals);
       if (a !== null) personalAvg[dim] = a;
     }
 
-    // OLS retention risk based on overall mood trend
+    // OLS retention risk: negative slope (mood declining) → higher risk
     const moodTimeSeries = userCheckins.map((c) => {
-      const dimVals = dimensions.map((d) => c.scores?.[d] ?? null).filter((v): v is number => v !== null);
+      const dimVals = dimensions
+        .map((d) => c.scores?.[d] ?? null)
+        .filter((v): v is number => v !== null);
       return avg(dimVals) ?? 0;
     });
     const trendSlope = olsSlope(moodTimeSeries);
-    // Negative slope → rising risk; clamp [0, 1]
+    // Clamp retention risk to [0, 1]; slope of -0.05 → risk ~1.0
     const retentionRisk = Math.max(0, Math.min(1, 0.5 - trendSlope * 10));
 
     // Company averages (N ≥ companyMinN)
@@ -571,7 +615,7 @@ export const computeInsights = functions.firestore
         companyAvg = {};
         for (const dim of dimensions) {
           const vals = companyCheckinsSnap.docs
-            .map((d) => (d.data() as typeof checkin).scores?.[dim] ?? null)
+            .map((d) => (d.data() as CheckinDoc).scores?.[dim] ?? null)
             .filter((v): v is number => v !== null);
           const a = avg(vals);
           if (a !== null) companyAvg[dim] = a;
@@ -593,7 +637,7 @@ export const computeInsights = functions.firestore
         departmentAvg = {};
         for (const dim of dimensions) {
           const vals = deptCheckinsSnap.docs
-            .map((d) => (d.data() as typeof checkin).scores?.[dim] ?? null)
+            .map((d) => (d.data() as CheckinDoc).scores?.[dim] ?? null)
             .filter((v): v is number => v !== null);
           const a = avg(vals);
           if (a !== null) departmentAvg[dim] = a;
@@ -601,39 +645,43 @@ export const computeInsights = functions.firestore
       }
     }
 
-    // Write insights
-    await db.collection("insights").doc(userId).set(
-      {
-        userId,
-        companyId: companyId ?? null,
-        department_name: department ?? null,
-        personal: {
-          avg: personalAvg,
-          checkin_count: userCheckins.length,
-          trend_slope: trendSlope,
-          retention_risk: retentionRisk,
+    // Write insights document for the user
+    await db
+      .collection("insights")
+      .doc(userId)
+      .set(
+        {
+          userId,
+          companyId: companyId ?? null,
+          department_name: department ?? null,
+          personal: {
+            avg: personalAvg,
+            checkin_count: userCheckins.length,
+            trend_slope: trendSlope,
+            retention_risk: retentionRisk,
+          },
+          company: companyAvg
+            ? { avg: companyAvg, checkin_count: companyCheckinCount }
+            : null,
+          department_stats: departmentAvg
+            ? { avg: departmentAvg, checkin_count: deptCheckinCount }
+            : null,
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
         },
-        company: companyAvg
-          ? { avg: companyAvg, checkin_count: companyCheckinCount }
-          : null,
-        department_stats: departmentAvg
-          ? { avg: departmentAvg, checkin_count: deptCheckinCount }
-          : null,
-        updated_at: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+        { merge: true }
+      );
 
-    functions.logger.info("Insights computed", { userId, companyId, retentionRisk });
-  });
+    logger.info("Insights computed", { userId, companyId, retentionRisk });
+  }
+);
 
 // ---------------------------------------------------------------------------
 // 7. getThresholds — HTTPS Callable (Auth required)
 // ---------------------------------------------------------------------------
 
-export const getThresholds = functions.https.onCall(async (_data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
+export const getThresholds = onCall(async (request: CallableRequest<unknown>) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
   }
 
   const raw = (await cachedRead("platform_config/thresholds", async () => {
@@ -648,23 +696,23 @@ export const getThresholds = functions.https.onCall(async (_data, context) => {
 // 8. updateThresholds — HTTPS Callable (Admin only)
 // ---------------------------------------------------------------------------
 
-export const updateThresholds = functions.https.onCall(
-  async (data: Record<string, number>, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "Authentication required");
+export const updateThresholds = onCall(
+  async (request: CallableRequest<Record<string, number>>) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required");
     }
-    if (!context.auth.token.is_admin) {
-      throw new functions.https.HttpsError("permission-denied", "Admin access required");
+    if (!request.auth.token.is_admin) {
+      throw new HttpsError("permission-denied", "Admin access required");
     }
 
-    const safe = applyThresholdFloors(data);
+    const safe = applyThresholdFloors(request.data);
 
     await db.collection("platform_config").doc("thresholds").set(safe, { merge: true });
 
-    // Invalidate cache
+    // Invalidate cache so the next read picks up new values
     cache.delete("platform_config/thresholds");
 
-    functions.logger.info("Thresholds updated by admin", { uid: context.auth.uid, safe });
+    logger.info("Thresholds updated by admin", { uid: request.auth.uid, safe });
     return safe;
   }
 );
@@ -673,7 +721,7 @@ export const updateThresholds = functions.https.onCall(
 // 9. daasWidgetApi — HTTPS (API key auth, rate-limited)
 // ---------------------------------------------------------------------------
 
-export const daasWidgetApi = functions.https.onRequest(async (req, res) => {
+export const daasWidgetApi = onRequest(async (req, res) => {
   // Only GET is supported
   if (req.method !== "GET") {
     res.status(405).json({ error: "Method not allowed" });
@@ -687,7 +735,12 @@ export const daasWidgetApi = functions.https.onRequest(async (req, res) => {
   }
 
   // Validate API key
-  const keySnap = await db.collection("daas_api_keys").where("key", "==", apiKey).where("active", "==", true).limit(1).get();
+  const keySnap = await db
+    .collection("daas_api_keys")
+    .where("key", "==", apiKey)
+    .where("active", "==", true)
+    .limit(1)
+    .get();
   if (keySnap.empty) {
     res.status(401).json({ error: "Invalid or inactive API key" });
     return;
@@ -702,12 +755,14 @@ export const daasWidgetApi = functions.https.onRequest(async (req, res) => {
     rate_limit_hour: number;
   };
 
-  // Rate limiting: 100 requests per hour using Firestore counter
+  // Rate limiting: N requests per hour using Firestore counter
   const windowStart = new Date();
-  windowStart.setMinutes(0, 0, 0); // start of current hour
-  const windowKey = `${windowStart.toISOString()}`;
+  windowStart.setMinutes(0, 0, 0); // truncate to start of current hour
+  const windowKey = windowStart.toISOString();
 
-  const rateRef = db.collection("daas_rate_limits").doc(`${keyDoc.id}_${windowKey}`);
+  const rateRef = db
+    .collection("daas_rate_limits")
+    .doc(`${keyDoc.id}_${windowKey}`);
   const rateDoc = await rateRef.get();
   const currentCount: number = rateDoc.exists ? (rateDoc.data()?.count ?? 0) : 0;
 
@@ -717,19 +772,21 @@ export const daasWidgetApi = functions.https.onRequest(async (req, res) => {
     return;
   }
 
-  // Increment counter (TTL 2 hours to auto-clean)
+  // Increment counter with 2-hour TTL for auto-clean
   await rateRef.set(
     {
       count: admin.firestore.FieldValue.increment(1),
       window: windowKey,
-      expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 2 * 60 * 60 * 1000)),
+      expires_at: admin.firestore.Timestamp.fromDate(
+        new Date(Date.now() + 2 * 60 * 60 * 1000)
+      ),
     },
     { merge: true }
   );
 
   const companyId = keyData.companyId;
 
-  // Load thresholds
+  // Load thresholds (cached)
   const thresholds = (await cachedRead("platform_config/thresholds", async () => {
     const doc = await db.collection("platform_config").doc("thresholds").get();
     return doc.exists ? doc.data() : {};
@@ -737,7 +794,7 @@ export const daasWidgetApi = functions.https.onRequest(async (req, res) => {
   const safe = applyThresholdFloors(thresholds);
   const companyMinN = safe.company_min_n;
 
-  // Fetch company check-ins
+  // Fetch recent company check-ins (cap at 500 for performance)
   const checkinsSnap = await db
     .collection("checkins")
     .where("companyId", "==", companyId)
@@ -756,23 +813,28 @@ export const daasWidgetApi = functions.https.onRequest(async (req, res) => {
     return;
   }
 
-  // Aggregate scores
   type CheckinData = { scores: Record<string, number>; created_at: admin.firestore.Timestamp };
   const checkins = checkinsSnap.docs.map((d) => d.data() as CheckinData);
   const allDimensions = Object.keys(checkins[0]?.scores ?? {});
 
+  // Aggregate dimension averages
   const dimAvgs: Record<string, number> = {};
   for (const dim of allDimensions) {
-    const vals = checkins.map((c) => c.scores?.[dim]).filter((v): v is number => typeof v === "number");
+    const vals = checkins
+      .map((c) => c.scores?.[dim])
+      .filter((v): v is number => typeof v === "number");
     const a = avg(vals);
     if (a !== null) dimAvgs[dim] = parseFloat(a.toFixed(2));
   }
 
   const overallWellbeing = avg(Object.values(dimAvgs));
 
-  // Trend: compare last 30 vs previous 30 check-ins
+  // Trend: compare average of most recent 30 vs previous 30 check-ins
   const recent = checkins.slice(0, Math.min(30, checkins.length));
-  const older = checkins.slice(Math.min(30, checkins.length), Math.min(60, checkins.length));
+  const older = checkins.slice(
+    Math.min(30, checkins.length),
+    Math.min(60, checkins.length)
+  );
 
   const recentAvg = avg(recent.flatMap((c) => Object.values(c.scores)));
   const olderAvg = avg(older.flatMap((c) => Object.values(c.scores)));
@@ -786,7 +848,8 @@ export const daasWidgetApi = functions.https.onRequest(async (req, res) => {
   res.status(200).json({
     anonymized: true,
     checkin_count: checkinsSnap.size,
-    wellbeing_score: overallWellbeing !== null ? parseFloat(overallWellbeing.toFixed(2)) : null,
+    wellbeing_score:
+      overallWellbeing !== null ? parseFloat(overallWellbeing.toFixed(2)) : null,
     dimensions: dimAvgs,
     trend,
   });
@@ -796,21 +859,21 @@ export const daasWidgetApi = functions.https.onRequest(async (req, res) => {
 // 10. setAdminClaim — HTTPS Callable (Admin only)
 // ---------------------------------------------------------------------------
 
-export const setAdminClaim = functions.https.onCall(
-  async (data: { targetUid: string }, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "Authentication required");
+export const setAdminClaim = onCall(
+  async (request: CallableRequest<{ targetUid: string }>) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required");
     }
-    if (!context.auth.token.is_admin) {
-      throw new functions.https.HttpsError("permission-denied", "Admin access required");
+    if (!request.auth.token.is_admin) {
+      throw new HttpsError("permission-denied", "Admin access required");
     }
 
-    const { targetUid } = data;
+    const { targetUid } = request.data;
     if (!targetUid) {
-      throw new functions.https.HttpsError("invalid-argument", "targetUid is required");
+      throw new HttpsError("invalid-argument", "targetUid is required");
     }
 
-    // Get existing claims to preserve other fields
+    // Preserve any existing claims, then elevate
     const targetUser = await admin.auth().getUser(targetUid);
     const existingClaims = (targetUser.customClaims ?? {}) as Record<string, unknown>;
 
@@ -820,8 +883,8 @@ export const setAdminClaim = functions.https.onCall(
       role: "admin",
     });
 
-    functions.logger.info("Admin claim set", {
-      by: context.auth.uid,
+    logger.info("Admin claim set", {
+      by: request.auth.uid,
       for: targetUid,
     });
 
