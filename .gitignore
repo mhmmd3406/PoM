@@ -1,0 +1,33 @@
+# Node
+node_modules/
+package-lock.json
+*.tsbuildinfo
+
+# Build outputs
+dist/
+build/
+lib/
+functions/lib/
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+mobile/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Env
+.env.local
+.env
+
+# Firebase
+.firebase/

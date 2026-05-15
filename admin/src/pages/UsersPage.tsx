@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
+import { doc, updateDoc } from 'firebase/firestore'
+import { db } from '../firebase'
 import { useCollection, where, orderBy, Timestamp } from '../hooks/useFirestore'
 import { DataTable, Column } from '../components/DataTable'
-import { httpsCallable } from 'firebase/functions'
-import { functions } from '../firebase'
 import { useAuth } from '../hooks/useAuth'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -64,9 +64,6 @@ function ChangeRoleModal({ user, onClose, onSaved }: ChangeRoleModalProps) {
     setLoading(true)
     setError(null)
     try {
-      // Update user document role
-      const { doc, updateDoc } = await import('firebase/firestore')
-      const { db } = await import('../firebase')
       await updateDoc(doc(db, 'users', user.id), { role: selectedRole })
       onSaved()
       onClose()
@@ -128,8 +125,6 @@ function DeleteModal({ user, onClose, onDeleted }: DeleteModalProps) {
     setLoading(true)
     setError(null)
     try {
-      const { doc, updateDoc } = await import('firebase/firestore')
-      const { db } = await import('../firebase')
       // Soft delete
       await updateDoc(doc(db, 'users', user.id), { deleted: true })
       onDeleted()
@@ -164,7 +159,7 @@ function DeleteModal({ user, onClose, onDeleted }: DeleteModalProps) {
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function UsersPage() {
-  const { authState } = useAuth()
+  useAuth() // ensure auth context is initialized
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [changeRoleUser, setChangeRoleUser] = useState<UserDoc | null>(null)

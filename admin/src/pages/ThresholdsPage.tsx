@@ -8,8 +8,11 @@ import { db } from '../firebase'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface ThresholdsDoc extends ThresholdConfig {
+interface ThresholdsDoc {
+  company_min_n?: number
+  department_min_n?: number
   _updated_at?: Timestamp
+  [key: string]: number | Timestamp | undefined
 }
 
 // ── Defaults ─────────────────────────────────────────────────────────────────
