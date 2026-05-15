@@ -20,7 +20,6 @@
     }
   ],
   "hosting": {
-    "target": "admin",
     "public": "admin/dist",
     "cleanUrls": true,
     "trailingSlash": false,
