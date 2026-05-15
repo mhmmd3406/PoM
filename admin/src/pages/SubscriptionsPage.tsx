@@ -237,19 +237,14 @@ export default function SubscriptionsPage() {
         <div className="card p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Durum Özeti</h2>
           <div className="space-y-2">
-            {STATUS_KEYS.map((s) => {
-              const STATUS_TR: Record<string, string> = {
-                active: 'Aktif', trialing: 'Deneme', past_due: 'Gecikmiş', canceled: 'İptal', inactive: 'Pasif',
-              }
-              return (
-                <div key={s} className="flex items-center justify-between">
-                  <StatusBadge status={s} />
-                  <span className="text-sm font-semibold tabular-nums text-gray-800">
-                    {isLoading ? '…' : (stats.statusCounts[s] ?? 0).toLocaleString('tr-TR')}
-                  </span>
-                </div>
-              )
-            })}
+            {STATUS_KEYS.map((s) => (
+              <div key={s} className="flex items-center justify-between">
+                <StatusBadge status={s} />
+                <span className="text-sm font-semibold tabular-nums text-gray-800">
+                  {isLoading ? '…' : (stats.statusCounts[s] ?? 0).toLocaleString('tr-TR')}
+                </span>
+              </div>
+            ))}
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-500">Ücretli Aktif</p>
