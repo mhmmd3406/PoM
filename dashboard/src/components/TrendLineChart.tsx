@@ -88,15 +88,6 @@ export default function TrendLineChart({ points, selectedDimension }: TrendLineC
               />
             ))}
           </>
-        ) : selectedDimension === 'score' ? (
-          <Line
-            type="monotone"
-            dataKey="Genel"
-            stroke="#0284c7"
-            strokeWidth={3}
-            dot={false}
-            activeDot={{ r: 5 }}
-          />
         ) : (
           (() => {
             const meta = DIMENSION_META.find((d) => d.key === selectedDimension)
