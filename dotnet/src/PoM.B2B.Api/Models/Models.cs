@@ -134,3 +134,15 @@ public record ReportStatus(
     string Status,
     string? DownloadUrl,
     DateTimeOffset? GeneratedAt);
+
+// ── Platform dynamic config ───────────────────────────────────────────────────
+
+public record PlatformThresholds(
+    int CompanyThreshold,
+    int DepartmentThreshold,
+    int MinEmployees,
+    int MaxHeadToHead,
+    int RetentionMaxMonths)
+{
+    public static PlatformThresholds Defaults => new(15, 10, 200, 3, 12);
+}

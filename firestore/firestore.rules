@@ -4,10 +4,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // -----------------------------------------------------------------------
-    // RBAC helpers — subscription_tier is a Firebase custom claim set by
-    // Cloud Function triggers whenever the users/{uid} document changes.
-    // Tiers in ascending privilege order:
-    //   free → pro → standard → professional → enterprise → daas
+    // RBAC helpers
     // -----------------------------------------------------------------------
 
     function isAuthenticated() {
@@ -35,8 +32,9 @@ service cloud.firestore {
           && request.auth.token.get('b2b_bank_id', null) != null;
     }
 
-    // Privacy gate: document must have N >= 7 entries to be readable
-    function meetsPrivacyThreshold(doc) {
+    // Hard-floor privacy gate (safety net — application layer enforces higher thresholds).
+    // This ensures that even a misconfigured application cannot expose data below N=7.
+    function meetsPrivacyFloor(doc) {
       return doc.data.entry_count >= 7;
     }
 
@@ -53,15 +51,49 @@ service cloud.firestore {
     }
 
     // -----------------------------------------------------------------------
+    // platform_config/{docId}
+    // All authenticated users may read (needed by Flutter + B2B dashboard).
+    // All writes are server-side via Admin SDK — clients cannot write.
+    // -----------------------------------------------------------------------
+    match /platform_config/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // announcements/{announcementId}
+    // All authenticated users may read active announcements.
+    // -----------------------------------------------------------------------
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated() && resource.data.is_active == true;
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // disputes/{disputeId}
+    // B2B users may create disputes for their own bank.
+    // B2B users may read their own bank's disputes.
+    // Only admin Cloud Functions may update (via Admin SDK).
+    // -----------------------------------------------------------------------
+    match /disputes/{disputeId} {
+      allow read: if isB2BUser()
+        && resource.data.bank_id == request.auth.token.b2b_bank_id;
+      allow create: if isB2BUser()
+        && request.resource.data.bank_id == request.auth.token.b2b_bank_id
+        && request.resource.data.submitted_by == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update, delete: if false;
+    }
+
+    // -----------------------------------------------------------------------
     // users/{userId}
     // -----------------------------------------------------------------------
     match /users/{userId} {
       allow read: if isOwner(userId);
-
-      // Direct client creates are forbidden — Cloud Function onUserCreated handles this
       allow create: if false;
 
-      // Only mutable profile fields; subscription fields are server-only
+      // Mutable profile fields + kvkk consent version.
+      // Server-controlled fields are blocked.
       allow update: if isOwner(userId)
         && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny([
@@ -84,6 +116,8 @@ service cloud.firestore {
 
     // -----------------------------------------------------------------------
     // banks/{bankId}
+    // Active banks readable by authenticated users.
+    // Writes are admin-only (via Admin SDK / Cloud Functions).
     // -----------------------------------------------------------------------
     match /banks/{bankId} {
       allow read: if isAuthenticated() && resource.data.is_active == true;
@@ -92,7 +126,6 @@ service cloud.firestore {
 
     // -----------------------------------------------------------------------
     // checkins/{checkinId}
-    // Raw check-in data is never readable by clients (privacy by design).
     // -----------------------------------------------------------------------
     match /checkins/{checkinId} {
       allow read: if false;
@@ -113,17 +146,13 @@ service cloud.firestore {
 
     // -----------------------------------------------------------------------
     // aggregations/{aggId}
-    //
-    // RBAC:
-    //   Free tier  → overall scores only (business_family == 'all')
-    //   Pro+       → any business family breakdown
-    //   Enterprise → covered by Pro+ rule; b2b_snapshots for deep access
+    // Hard-floor N>=7 enforced here. Application layer uses higher thresholds
+    // from platform_config (N>=15 company, N>=10 department by default).
     // -----------------------------------------------------------------------
     match /aggregations/{aggId} {
       allow read: if isAuthenticated()
-        && meetsPrivacyThreshold(resource)
+        && meetsPrivacyFloor(resource)
         && (
-          // Free users may only read the 'all' rollup — not family breakdowns
           resource.data.business_family == 'all'
           || isAtLeastPro()
         );
@@ -133,11 +162,10 @@ service cloud.firestore {
 
     // -----------------------------------------------------------------------
     // sector_aggregations/{aggId}
-    // Same RBAC as aggregations — sector-wide but still tiered.
     // -----------------------------------------------------------------------
     match /sector_aggregations/{aggId} {
       allow read: if isAuthenticated()
-        && meetsPrivacyThreshold(resource)
+        && meetsPrivacyFloor(resource)
         && (
           resource.data.business_family == 'all'
           || isAtLeastPro()
@@ -157,8 +185,6 @@ service cloud.firestore {
 
     // -----------------------------------------------------------------------
     // b2b_snapshots/{snapId}
-    // Enterprise+ B2B users only; bank_id must match their custom claim.
-    // The DaaS widget reads this via the Admin SDK (bypasses rules).
     // -----------------------------------------------------------------------
     match /b2b_snapshots/{snapId} {
       allow read: if isB2BUser()
@@ -174,7 +200,6 @@ service cloud.firestore {
 
     // -----------------------------------------------------------------------
     // b2b_reports/{reportId}
-    // Enterprise+ B2B users only.
     // -----------------------------------------------------------------------
     match /b2b_reports/{reportId} {
       allow read: if isB2BUser()
@@ -186,8 +211,6 @@ service cloud.firestore {
 
     // -----------------------------------------------------------------------
     // api_keys/{keyId}
-    // DaaS API keys — readable only by the owner for self-inspection.
-    // All writes are server-side via Admin SDK.
     // -----------------------------------------------------------------------
     match /api_keys/{keyId} {
       allow read: if isAuthenticated()

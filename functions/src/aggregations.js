@@ -1,9 +1,12 @@
 'use strict';
 
 const admin = require('firebase-admin');
+const { getThresholds } = require('./platformConfig');
 
 const METRICS = ['salary', 'benefits', 'work_model', 'culture', 'wlb'];
-const PRIVACY_THRESHOLD = 7;
+
+// Fallback constant — used only when Firestore config is unavailable
+const PRIVACY_THRESHOLD_FLOOR = 7;
 
 /**
  * Builds the aggregation document ID.
@@ -147,21 +150,29 @@ async function reconcileAggregations(year, month) {
 }
 
 /**
- * Fetch insights for a bank+family combination, enforcing the N < 7 rule.
+ * Fetch insights for a bank+family combination.
+ * Threshold: company-level (family='all') uses companyThreshold,
+ * department-level uses departmentThreshold.
  * Returns null if the privacy threshold is not met.
  */
 async function getInsights(bankId, businessFamily, year, month) {
   const db = admin.firestore();
-  const docId = aggDocId(bankId, businessFamily || 'all', year, month);
-  const snap = await db.collection('aggregations').doc(docId).get();
+  const family = businessFamily || 'all';
+  const docId  = aggDocId(bankId, family, year, month);
+  const snap   = await db.collection('aggregations').doc(docId).get();
 
   if (!snap.exists) return null;
 
-  const data = snap.data();
-  if (data.entry_count < PRIVACY_THRESHOLD) return null; // privacy gate
+  const cfg = await getThresholds().catch(() => ({
+    companyThreshold: PRIVACY_THRESHOLD_FLOOR,
+    departmentThreshold: PRIVACY_THRESHOLD_FLOOR,
+  }));
+  const threshold = family === 'all' ? cfg.companyThreshold : cfg.departmentThreshold;
 
-  // Also fetch sector baseline for comparison
-  const sectorId = aggDocId(null, businessFamily || 'all', year, month);
+  const data = snap.data();
+  if (data.entry_count < threshold) return null;
+
+  const sectorId   = aggDocId(null, family, year, month);
   const sectorSnap = await db.collection('sector_aggregations').doc(sectorId).get();
 
   return {
@@ -169,7 +180,7 @@ async function getInsights(bankId, businessFamily, year, month) {
       averages: data.averages,
       entryCount: data.entry_count,
     },
-    sector: sectorSnap.exists && sectorSnap.data().entry_count >= PRIVACY_THRESHOLD
+    sector: sectorSnap.exists && sectorSnap.data().entry_count >= threshold
       ? { averages: sectorSnap.data().averages }
       : null,
     period: { year, month },
@@ -193,13 +204,20 @@ async function getTrendData(bankId, businessFamily, fromYear, fromMonth, toYear,
     .orderBy('month')
     .get();
 
+  const cfg = await getThresholds().catch(() => ({
+    companyThreshold: PRIVACY_THRESHOLD_FLOOR,
+    departmentThreshold: PRIVACY_THRESHOLD_FLOOR,
+  }));
+  const threshold = (businessFamily === 'all' || !businessFamily)
+    ? cfg.companyThreshold
+    : cfg.departmentThreshold;
+
   return snaps.docs
     .map((d) => d.data())
     .filter((d) => {
-      // Clamp to requested range
       if (d.year === fromYear && d.month < fromMonth) return false;
       if (d.year === toYear && d.month > toMonth) return false;
-      return d.entry_count >= PRIVACY_THRESHOLD;
+      return d.entry_count >= threshold;
     })
     .map((d) => ({
       year: d.year,
@@ -210,7 +228,7 @@ async function getTrendData(bankId, businessFamily, fromYear, fromMonth, toYear,
 }
 
 module.exports = {
-  PRIVACY_THRESHOLD,
+  PRIVACY_THRESHOLD_FLOOR,
   updateAggregation,
   reconcileAggregations,
   getInsights,

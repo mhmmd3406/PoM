@@ -17,6 +17,7 @@ const {
   createPortalSession,
   subscriptionSecrets,
 } = require('./src/subscriptions');
+const adminConfig = require('./src/adminConfig');
 const { defineSecret } = require('firebase-functions/params');
 
 // All secrets are stored in Google Cloud Secret Manager.
@@ -306,4 +307,43 @@ exports.generateB2BSnapshotsScheduled = functions.pubsub
   .onRun(async () => {
     const { published, skipped } = await generateB2BSnapshots();
     console.log(`B2B snapshots: ${published} published, ${skipped} withheld (delta < 3)`);
+  });
+
+// ---------------------------------------------------------------------------
+// Admin panel — platform configuration management
+// All functions require the is_admin custom claim.
+// ---------------------------------------------------------------------------
+exports.adminUpdateThresholds      = adminConfig.adminUpdateThresholds;
+exports.adminUpdateLegalText       = adminConfig.adminUpdateLegalText;
+exports.adminUpdateFeatureFlags    = adminConfig.adminUpdateFeatureFlags;
+exports.adminUpsertBank            = adminConfig.adminUpsertBank;
+exports.adminResolveDispute        = adminConfig.adminResolveDispute;
+exports.adminPublishAnnouncement   = adminConfig.adminPublishAnnouncement;
+exports.adminToggleAnnouncement    = adminConfig.adminToggleAnnouncement;
+
+// ---------------------------------------------------------------------------
+// User-facing — dispute submission (B2B users) and account deletion (all users)
+// ---------------------------------------------------------------------------
+exports.submitDispute = adminConfig.submitDispute;
+exports.deleteAccount = adminConfig.deleteAccount;
+
+// ---------------------------------------------------------------------------
+// Scheduled: daily cleanup — delete expired query sessions
+// ---------------------------------------------------------------------------
+exports.cleanupExpiredSessions = functions.pubsub
+  .schedule('0 2 * * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    const db = admin.firestore();
+    const snap = await db
+      .collection('query_sessions')
+      .where('expires_at', '<', admin.firestore.Timestamp.now())
+      .limit(500)
+      .get();
+
+    if (snap.empty) return;
+    const batch = db.batch();
+    snap.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    console.log(`Deleted ${snap.size} expired query sessions`);
   });

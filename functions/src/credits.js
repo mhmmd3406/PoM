@@ -1,14 +1,13 @@
 'use strict';
 
 const admin = require('firebase-admin');
+const { getThresholds } = require('./platformConfig');
 
 const CREDITS = {
   SIGNUP_BONUS: 3,
   WEEKLY_CHECKIN: 2,
   QUERY_COST: 1,
 };
-
-const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Atomically award credits and record the transaction.
@@ -69,14 +68,17 @@ async function awardCheckinCredits(userId) {
   const lastCheckin = userSnap.data().last_checkin_at?.toDate();
   const now = new Date();
 
-  if (lastCheckin && now - lastCheckin < MS_PER_WEEK) {
+  const cfg = await getThresholds().catch(() => ({ checkinCooldownDays: 7 }));
+  const cooldownMs = cfg.checkinCooldownDays * 24 * 60 * 60 * 1000;
+
+  if (lastCheckin && now - lastCheckin < cooldownMs) {
     throw new Error('checkin_too_soon');
   }
 
   await awardCredits(userId, 'weekly_checkin', CREDITS.WEEKLY_CHECKIN);
 
   // Update last_checkin_at and streak
-  const newStreak = lastCheckin && now - lastCheckin < 2 * MS_PER_WEEK
+  const newStreak = lastCheckin && now - lastCheckin < 2 * cooldownMs
     ? (userSnap.data().checkin_streak || 0) + 1
     : 1;
 

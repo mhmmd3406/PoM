@@ -1,8 +1,8 @@
 'use strict';
 
 const admin = require('firebase-admin');
+const { getThresholds } = require('./platformConfig');
 
-const PRIVACY_THRESHOLD = 7;
 // Minimum new entries required between snapshots.
 // With delta >= 3, an attacker observing two consecutive snapshots gets one
 // linear equation with ≥3 unknowns — mathematically unsolvable for individual scores.
@@ -46,13 +46,14 @@ async function generateB2BSnapshots() {
   let published = 0;
   let skipped = 0;
 
+  const cfg = await getThresholds().catch(() => ({ companyThreshold: 15, departmentThreshold: 10 }));
+
   for (const { year, month } of periods) {
-    // Fetch all live aggregations for this period
+    // Fetch all live aggregations — filter by threshold in memory (different thresholds per family)
     const liveSnap = await db
       .collection('aggregations')
       .where('year', '==', year)
       .where('month', '==', month)
-      .where('entry_count', '>=', PRIVACY_THRESHOLD)
       .get();
 
     const batch = db.batch();
@@ -60,6 +61,10 @@ async function generateB2BSnapshots() {
     for (const liveDoc of liveSnap.docs) {
       const live = liveDoc.data();
       const { bank_id, business_family } = live;
+
+      // Apply dynamic threshold (company vs department)
+      const threshold = business_family === 'all' ? cfg.companyThreshold : cfg.departmentThreshold;
+      if (live.entry_count < threshold) { skipped++; continue; }
 
       const docId = snapshotDocId(bank_id, business_family, year, month);
       const snapshotRef = db.collection('b2b_snapshots').doc(docId);

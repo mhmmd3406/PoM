@@ -6,13 +6,46 @@ namespace PoM.B2B.Api.Services;
 public sealed class FirestoreService : IFirestoreService
 {
     private readonly FirestoreDb _db;
-    private const int PrivacyThreshold = 7;
+
+    private PlatformThresholds? _cachedThresholds;
+    private DateTimeOffset _thresholdsCachedAt = DateTimeOffset.MinValue;
+    private static readonly TimeSpan ThresholdsCacheTtl = TimeSpan.FromMinutes(5);
 
     public FirestoreService(IConfiguration config)
     {
         var projectId = config["Firebase:ProjectId"]
             ?? throw new InvalidOperationException("Firebase:ProjectId not configured");
         _db = FirestoreDb.Create(projectId);
+    }
+
+    private async Task<PlatformThresholds> GetThresholdsAsync(CancellationToken ct = default)
+    {
+        if (_cachedThresholds is not null
+            && DateTimeOffset.UtcNow - _thresholdsCachedAt < ThresholdsCacheTtl)
+            return _cachedThresholds;
+
+        try
+        {
+            var snap = await _db.Document("platform_config/thresholds").GetSnapshotAsync(ct);
+            _cachedThresholds = snap.Exists
+                ? new PlatformThresholds(
+                    CompanyThreshold:    Math.Max(7,  SafeInt(snap, "company_privacy_threshold",    15)),
+                    DepartmentThreshold: Math.Max(5,  SafeInt(snap, "department_privacy_threshold", 10)),
+                    MinEmployees:        Math.Max(0,  SafeInt(snap, "min_company_employees",        200)),
+                    MaxHeadToHead:       Math.Min(10, Math.Max(1, SafeInt(snap, "max_head_to_head_competitors", 3))),
+                    RetentionMaxMonths:  Math.Min(24, Math.Max(2, SafeInt(snap, "retention_risk_max_months",    12))))
+                : PlatformThresholds.Defaults;
+        }
+        catch { _cachedThresholds = PlatformThresholds.Defaults; }
+
+        _thresholdsCachedAt = DateTimeOffset.UtcNow;
+        return _cachedThresholds;
+    }
+
+    private static int SafeInt(DocumentSnapshot snap, string field, int fallback)
+    {
+        try { return (int)snap.GetValue<long>(field); }
+        catch { return fallback; }
     }
 
     // ── Trend ─────────────────────────────────────────────────────────────────
@@ -61,9 +94,10 @@ public sealed class FirestoreService : IFirestoreService
 
         if (!bankSnap.Exists) return null;
 
+        var cfg = await GetThresholdsAsync(ct);
         var bankAvg   = ParseAverages(bankSnap);
         var sectorAvg = sectorSnap.Exists
-            && sectorSnap.GetValue<long>("entry_count") >= PrivacyThreshold
+            && sectorSnap.GetValue<long>("entry_count") >= cfg.CompanyThreshold
             ? ParseAverages(sectorSnap) : null;
 
         return new BenchmarkResponse(
@@ -80,7 +114,8 @@ public sealed class FirestoreService : IFirestoreService
         string businessFamily, int year, int month,
         CancellationToken ct = default)
     {
-        // Fetch all bank snapshots in parallel (client + competitors)
+        var cfg = await GetThresholdsAsync(ct);
+
         var allBankIds = new[] { clientBankId }.Concat(competitorBankIds).ToList();
 
         var tasks = allBankIds.Select(bankId =>
@@ -89,15 +124,15 @@ public sealed class FirestoreService : IFirestoreService
             return _db.Collection("b2b_snapshots").Document(docId).GetSnapshotAsync(ct);
         }).ToList();
 
-        // Also fetch sector for delta calculation
         var sectorId   = $"SECTOR_{businessFamily}_{year}_{month:D2}";
         var sectorTask = _db.Collection("sector_aggregations").Document(sectorId).GetSnapshotAsync(ct);
 
         await Task.WhenAll(tasks.Concat([sectorTask]));
 
         var sectorSnap = sectorTask.Result;
+        var threshold  = businessFamily == "all" ? cfg.CompanyThreshold : cfg.DepartmentThreshold;
         var sectorAvg  = sectorSnap.Exists
-            && sectorSnap.GetValue<long>("entry_count") >= PrivacyThreshold
+            && sectorSnap.GetValue<long>("entry_count") >= threshold
             ? ParseAverages(sectorSnap) : null;
 
         HeadToHeadEntry BuildEntry(string bankId, DocumentSnapshot snap)
@@ -105,7 +140,7 @@ public sealed class FirestoreService : IFirestoreService
             if (!snap.Exists) return new HeadToHeadEntry(bankId, true, null, null);
 
             var count = (int)snap.GetValue<long>("entry_count");
-            if (count < PrivacyThreshold)
+            if (count < threshold)
                 return new HeadToHeadEntry(bankId, true, null, null);
 
             var avg = ParseAverages(snap);
@@ -140,12 +175,16 @@ public sealed class FirestoreService : IFirestoreService
         // Group by business_family → ordered list of (month_index, overall)
         var byFamily = new Dictionary<string, List<(int idx, double overall)>>();
 
+        var cfg = await GetThresholdsAsync(ct);
+
         foreach (var doc in snap.Documents)
         {
             var year  = (int)doc.GetValue<long>("year");
             var month = (int)doc.GetValue<long>("month");
             if (year == start.Year && month < start.Month) continue;
-            if (doc.GetValue<long>("entry_count") < PrivacyThreshold) continue;
+            var family = doc.GetValue<string>("business_family");
+            var t = family == "all" ? cfg.CompanyThreshold : cfg.DepartmentThreshold;
+            if (doc.GetValue<long>("entry_count") < t) continue;
 
             var family  = doc.GetValue<string>("business_family");
             var overall = ParseAverages(doc).Overall;
@@ -198,8 +237,10 @@ public sealed class FirestoreService : IFirestoreService
         if (!snap.Exists)
             return new WidgetResponse(bankId, businessFamily, null, null, null, null, true, timestamp);
 
+        var cfg   = await GetThresholdsAsync(ct);
         var count = (int)snap.GetValue<long>("entry_count");
-        if (count < PrivacyThreshold)
+        var widgetThreshold = businessFamily == "all" ? cfg.CompanyThreshold : cfg.DepartmentThreshold;
+        if (count < widgetThreshold)
             return new WidgetResponse(bankId, businessFamily, null, null, null, null, true, timestamp);
 
         var avg = ParseAverages(snap);
