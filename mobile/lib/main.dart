@@ -28,8 +28,8 @@ class PomApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'PoM',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       routerConfig: router,
     );

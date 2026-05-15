@@ -9,6 +9,15 @@ import '../../auth/providers/auth_provider.dart';
 import '../providers/insights_provider.dart';
 import 'radar_chart_widget.dart';
 
+// Expose dimension ordering for use in this file
+const _kDimensionOrder = [
+  'overallMood',
+  'workStress',
+  'teamHarmony',
+  'personalGrowth',
+  'workLifeBalance',
+];
+
 class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key});
 
@@ -139,7 +148,7 @@ class _InsightsContent extends StatelessWidget {
                     ...List.generate(
                       AppConstants.checkinDimensions.length,
                       (i) {
-                        final key = InsightModel._dimensionOrder[i];
+                        final key = _kDimensionOrder[i];
                         final personal = insights.personalScores[key] ?? 0;
                         final company = insights.companyScores?[key];
                         return _DimensionRow(
@@ -606,13 +615,3 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-// expose private member for DimensionRow
-extension on InsightModel {
-  static const _dimensionOrder = [
-    'overallMood',
-    'workStress',
-    'teamHarmony',
-    'personalGrowth',
-    'workLifeBalance',
-  ];
-}
