@@ -7,7 +7,7 @@ import '../data/subscription_repository.dart';
 final subscriptionStreamProvider =
     StreamProvider.autoDispose<SubscriptionModel?>((ref) {
   final user = ref.watch(currentUserProvider);
-  if (user == null) return const Stream.empty();
+  if (user == null) return Stream.empty();
 
   final repo = ref.watch(subscriptionRepositoryProvider);
   return repo.watchSubscription(user.uid);

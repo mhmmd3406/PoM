@@ -6,7 +6,7 @@ import '../data/insights_repository.dart';
 
 final insightsStreamProvider = StreamProvider.autoDispose<InsightModel?>((ref) {
   final user = ref.watch(currentUserProvider);
-  if (user == null) return const Stream.empty();
+  if (user == null) return Stream.empty();
 
   final repo = ref.watch(insightsRepositoryProvider);
   return repo.watchInsights(user.uid);

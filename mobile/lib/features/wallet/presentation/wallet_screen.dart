@@ -45,14 +45,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
           paymentIntentClientSecret: clientSecret,
           merchantDisplayName: 'PoM',
           style: ThemeMode.system,
-          appearance: PaymentSheetAppearance(
-            colors: PaymentSheetAppearanceColors(
-              primary: const Color(0xFF4A90D9),
-            ),
-            shapes: PaymentSheetShape(
-              borderRadius: 12,
-            ),
-          ),
         ),
       );
 
@@ -257,7 +249,7 @@ class _BalanceCard extends StatelessWidget {
         gradient: LinearGradient(
           colors: [
             scheme.primary,
-            scheme.primary.withBlue(255).withOpacity(0.85),
+            Color.lerp(scheme.primary, Colors.blue, 0.25)!,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,

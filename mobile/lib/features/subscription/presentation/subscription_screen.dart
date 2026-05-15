@@ -40,14 +40,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           paymentIntentClientSecret: clientSecret,
           merchantDisplayName: 'PoM',
           style: ThemeMode.system,
-          appearance: PaymentSheetAppearance(
-            colors: PaymentSheetAppearanceColors(
-              primary: const Color(0xFF4A90D9),
-            ),
-            shapes: PaymentSheetShape(
-              borderRadius: 12,
-            ),
-          ),
         ),
       );
 
