@@ -37,7 +37,6 @@ class BenchmarkingScreen extends ConsumerWidget {
               children: [
                 Expanded(
                   child: _CompanySelector(
-                    slot: 'A',
                     selected: companyA,
                     badgeColor: const Color(AppConstants.colorPersonal),
                     label: 'Şirket A',
@@ -50,7 +49,6 @@ class BenchmarkingScreen extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _CompanySelector(
-                    slot: 'B',
                     selected: companyB,
                     badgeColor: const Color(AppConstants.colorCompany),
                     label: 'Şirket B',
@@ -178,7 +176,6 @@ class BenchmarkingScreen extends ConsumerWidget {
 
 class _CompanySelector extends ConsumerStatefulWidget {
   const _CompanySelector({
-    required this.slot,
     required this.selected,
     required this.badgeColor,
     required this.label,
@@ -186,7 +183,6 @@ class _CompanySelector extends ConsumerStatefulWidget {
     required this.onClear,
   });
 
-  final String slot;
   final CompanySummary? selected;
   final Color badgeColor;
   final String label;

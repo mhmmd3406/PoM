@@ -6,7 +6,7 @@ import '../data/wallet_repository.dart';
 
 final walletBalanceProvider = StreamProvider.autoDispose<int>((ref) {
   final user = ref.watch(currentUserProvider);
-  if (user == null) return const Stream.empty();
+  if (user == null) return Stream.empty();
 
   final repo = ref.watch(walletRepositoryProvider);
   return repo.watchBalance(user.uid);
@@ -15,7 +15,7 @@ final walletBalanceProvider = StreamProvider.autoDispose<int>((ref) {
 final walletTransactionsProvider =
     StreamProvider.autoDispose<List<WalletTransactionModel>>((ref) {
   final user = ref.watch(currentUserProvider);
-  if (user == null) return const Stream.empty();
+  if (user == null) return Stream.empty();
 
   final repo = ref.watch(walletRepositoryProvider);
   return repo.watchTransactions(user.uid);
