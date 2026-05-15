@@ -22,11 +22,10 @@ class AuthState {
     UserModel? user,
     bool? isLoading,
     String? error,
-    bool clearUser = false,
     bool clearError = false,
   }) {
     return AuthState(
-      user: clearUser ? null : user ?? this.user,
+      user: user ?? this.user,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : error ?? this.error,
     );
@@ -45,7 +44,7 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
       next.when(
         data: (firebaseUser) async {
           if (firebaseUser == null) {
-            state = const AuthState(clearUser: true);
+            state = const AuthState();
             _notifyListeners();
           } else {
             state = state.copyWith(isLoading: true);
