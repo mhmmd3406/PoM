@@ -143,7 +143,6 @@ class _RadarChartWidgetState extends State<RadarChartWidget>
                     color: scheme.onSurface,
                     fontWeight: FontWeight.w500,
                   ),
-                  titlePadding: 18,
                 ),
               ),
             );
