@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 30
     clone_depth: 1
     environment:
-      flutter: 3.24.3
+      flutter: stable
       java: 17
     cache:
       cache_paths:
