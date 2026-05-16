@@ -47,8 +47,8 @@ class DefaultFirebaseOptions {
   // Project Settings → Your apps → Add app → Android / iOS
   // Şimdilik web config'i kullan (emulator/test için yeterli).
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBNj_7VEcXJ4AzS6i1q2ysupHP4FayEqiU',
-    appId: '1:1049001087254:web:a4d3089ee32891198b4037',
+    apiKey: 'AIzaSyBWZIc0l8GJqPmgScH-jlx-W_er6wy41aU',
+    appId: '1:1049001087254:android:6c7969c2a9746c378b4037',
     messagingSenderId: '1049001087254',
     projectId: 'pomapp-c3ccc',
     storageBucket: 'pomapp-c3ccc.firebasestorage.app',
