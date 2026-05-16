@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1049001087254",
+    "project_id": "pomapp-c3ccc",
+    "storage_bucket": "pomapp-c3ccc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1049001087254:android:6c7969c2a9746c378b4037",
+        "android_client_info": {
+          "package_name": "com.pom.pom_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWZIc0l8GJqPmgScH-jlx-W_er6wy41aU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
