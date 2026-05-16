@@ -1,8 +1,7 @@
 name: Test Runner
 
 on:
-  push:
-    branches: ['claude/**']
+  workflow_dispatch:
 
 jobs:
   test:
