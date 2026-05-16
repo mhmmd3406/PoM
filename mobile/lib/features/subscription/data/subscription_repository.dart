@@ -16,18 +16,14 @@ class SubscriptionRepository {
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
 
-  /// Stream the user's active subscription.
+  /// Stream the user's subscription (document ID == uid).
   Stream<SubscriptionModel?> watchSubscription(String uid) {
     return _firestore
         .collection(AppConstants.subscriptionsCollection)
-        .where('uid', isEqualTo: uid)
-        .where('status', whereIn: ['active', 'trialing'])
-        .orderBy('currentPeriodEnd', descending: true)
-        .limit(1)
+        .doc(uid)
         .snapshots()
-        .map((snap) => snap.docs.isEmpty
-            ? null
-            : SubscriptionModel.fromFirestore(snap.docs.first));
+        .map((snap) =>
+            snap.exists ? SubscriptionModel.fromFirestore(snap) : null);
   }
 
   /// Create or update a subscription via Cloud Function.

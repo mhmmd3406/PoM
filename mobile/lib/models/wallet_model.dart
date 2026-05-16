@@ -25,13 +25,14 @@ class WalletTransactionModel {
 
   factory WalletTransactionModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    final createdAtRaw = data['created_at'] ?? data['createdAt'];
     return WalletTransactionModel(
       id: doc.id,
-      uid: data['uid'] as String? ?? '',
+      uid: (data['userId'] ?? data['uid']) as String? ?? '',
       type: _parseType(data['type'] as String? ?? 'purchase'),
-      amount: data['amount'] as int? ?? 0,
-      createdAt: data['createdAt'] != null
-          ? (data['createdAt'] as Timestamp).toDate()
+      amount: (data['creditAmount'] ?? data['amount']) as int? ?? 0,
+      createdAt: createdAtRaw is Timestamp
+          ? createdAtRaw.toDate()
           : DateTime.now(),
       description: data['description'] as String?,
       stripePaymentIntentId: data['stripePaymentIntentId'] as String?,
