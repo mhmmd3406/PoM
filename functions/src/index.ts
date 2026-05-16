@@ -508,7 +508,53 @@ export const stripeWebhook = onRequest(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. deleteAccount — HTTPS Callable (Auth required)
+// 5. cancelSubscription — HTTPS Callable (Auth required)
+// ---------------------------------------------------------------------------
+
+export const cancelSubscription = onCall(
+  async (request: CallableRequest<{ subscriptionId: string }>) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required");
+    }
+
+    const { subscriptionId } = request.data;
+    if (!subscriptionId) {
+      throw new HttpsError("invalid-argument", "subscriptionId is required");
+    }
+
+    const uid = request.auth.uid;
+
+    // Subscription doc ID equals the Firebase UID
+    const subRef = db.collection("subscriptions").doc(uid);
+    const subDoc = await subRef.get();
+
+    if (!subDoc.exists) {
+      throw new HttpsError("not-found", "Subscription not found");
+    }
+
+    const storedSubId = subDoc.data()?.stripe_subscription_id as string | null;
+    if (!storedSubId || storedSubId !== subscriptionId) {
+      throw new HttpsError("permission-denied", "Subscription ID mismatch");
+    }
+
+    const stripe = getStripe();
+    // Cancel at period end — user retains access until the current period expires
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    await subRef.update({
+      cancel_at_period_end: true,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    logger.info("Subscription scheduled for cancellation", { uid, subscriptionId });
+    return { success: true };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 6b. deleteAccount — HTTPS Callable (Auth required)
 // ---------------------------------------------------------------------------
 
 export const deleteAccount = onCall(async (request: CallableRequest<unknown>) => {

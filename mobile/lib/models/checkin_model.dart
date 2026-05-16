@@ -44,17 +44,29 @@ class CheckinModel {
 
   factory CheckinModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    final scores = data['scores'] as Map<String, dynamic>?;
+    final createdAtRaw = data['createdAt'] ?? data['created_at'];
     return CheckinModel(
       id: doc.id,
-      uid: data['uid'] as String? ?? '',
-      overallMood: data['overallMood'] as int? ?? 3,
-      workStress: data['workStress'] as int? ?? 3,
-      teamHarmony: data['teamHarmony'] as int? ?? 3,
-      personalGrowth: data['personalGrowth'] as int? ?? 3,
-      workLifeBalance: data['workLifeBalance'] as int? ?? 3,
-      createdAt: data['createdAt'] != null
-          ? (data['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
+      uid: (data['uid'] ?? data['userId']) as String? ?? '',
+      overallMood: (scores?['Genel Ruh Hali'] ?? data['overallMood'])
+              ?.round() as int? ??
+          3,
+      workStress: (scores?['İş Stresi'] ?? data['workStress'])
+              ?.round() as int? ??
+          3,
+      teamHarmony: (scores?['Takım Uyumu'] ?? data['teamHarmony'])
+              ?.round() as int? ??
+          3,
+      personalGrowth: (scores?['Kişisel Gelişim'] ?? data['personalGrowth'])
+              ?.round() as int? ??
+          3,
+      workLifeBalance:
+          (scores?['İş-Yaşam Dengesi'] ?? data['workLifeBalance'])
+                  ?.round() as int? ??
+              3,
+      createdAt:
+          createdAtRaw is Timestamp ? createdAtRaw.toDate() : DateTime.now(),
       companyId: data['companyId'] as String?,
       department: data['department'] as String?,
       isAnonymized: data['isAnonymized'] as bool? ?? true,
@@ -62,14 +74,24 @@ class CheckinModel {
   }
 
   Map<String, dynamic> toFirestore() {
+    final ts = Timestamp.fromDate(createdAt);
     return {
       'uid': uid,
+      'userId': uid,
+      'scores': {
+        'Genel Ruh Hali': overallMood.toDouble(),
+        'İş Stresi': workStress.toDouble(),
+        'Takım Uyumu': teamHarmony.toDouble(),
+        'Kişisel Gelişim': personalGrowth.toDouble(),
+        'İş-Yaşam Dengesi': workLifeBalance.toDouble(),
+      },
       'overallMood': overallMood,
       'workStress': workStress,
       'teamHarmony': teamHarmony,
       'personalGrowth': personalGrowth,
       'workLifeBalance': workLifeBalance,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': ts,
+      'created_at': ts,
       if (companyId != null) 'companyId': companyId,
       if (department != null) 'department': department,
       'isAnonymized': isAnonymized,

@@ -16,21 +16,21 @@ class WalletRepository {
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
 
-  /// Stream the user's credit balance (from their user doc).
+  /// Stream the user's credit balance from the wallets collection.
   Stream<int> watchBalance(String uid) {
     return _firestore
-        .collection(AppConstants.usersCollection)
+        .collection('wallets')
         .doc(uid)
         .snapshots()
-        .map((snap) => snap.data()?['creditBalance'] as int? ?? 0);
+        .map((snap) => snap.data()?['credits'] as int? ?? 0);
   }
 
-  /// Stream the user's wallet transactions.
+  /// Stream the user's wallet transactions (stored in 'transactions' collection).
   Stream<List<WalletTransactionModel>> watchTransactions(String uid) {
     return _firestore
-        .collection('walletTransactions')
-        .where('uid', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
+        .collection('transactions')
+        .where('userId', isEqualTo: uid)
+        .orderBy('created_at', descending: true)
         .limit(30)
         .snapshots()
         .map((snap) =>

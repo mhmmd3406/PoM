@@ -76,20 +76,31 @@ class SubscriptionModel {
     final data = doc.data() as Map<String, dynamic>;
     return SubscriptionModel(
       id: doc.id,
-      uid: data['uid'] as String? ?? '',
+      uid: (data['userId'] ?? data['uid']) as String? ?? doc.id,
       plan: data['plan'] as String? ?? 'free',
       status: _parseStatus(data['status'] as String? ?? 'inactive'),
-      currentPeriodStart: data['currentPeriodStart'] != null
-          ? (data['currentPeriodStart'] as Timestamp).toDate()
+      currentPeriodStart: (data['currentPeriodStart'] ??
+              data['current_period_start']) is Timestamp
+          ? ((data['currentPeriodStart'] ?? data['current_period_start'])
+                  as Timestamp)
+              .toDate()
           : DateTime.now(),
-      currentPeriodEnd: data['currentPeriodEnd'] != null
-          ? (data['currentPeriodEnd'] as Timestamp).toDate()
-          : DateTime.now().add(const Duration(days: 30)),
-      stripeSubscriptionId: data['stripeSubscriptionId'] as String?,
-      stripeCustomerId: data['stripeCustomerId'] as String?,
-      cancelAtPeriodEnd: data['cancelAtPeriodEnd'] as bool? ?? false,
-      trialEnd: data['trialEnd'] != null
-          ? (data['trialEnd'] as Timestamp).toDate()
+      currentPeriodEnd:
+          (data['currentPeriodEnd'] ?? data['current_period_end']) is Timestamp
+              ? ((data['currentPeriodEnd'] ?? data['current_period_end'])
+                      as Timestamp)
+                  .toDate()
+              : DateTime.now().add(const Duration(days: 30)),
+      stripeSubscriptionId:
+          (data['stripeSubscriptionId'] ?? data['stripe_subscription_id'])
+              as String?,
+      stripeCustomerId:
+          (data['stripeCustomerId'] ?? data['stripe_customer_id']) as String?,
+      cancelAtPeriodEnd:
+          (data['cancelAtPeriodEnd'] ?? data['cancel_at_period_end']) as bool? ??
+              false,
+      trialEnd: (data['trialEnd'] ?? data['trial_end']) is Timestamp
+          ? ((data['trialEnd'] ?? data['trial_end']) as Timestamp).toDate()
           : null,
     );
   }
