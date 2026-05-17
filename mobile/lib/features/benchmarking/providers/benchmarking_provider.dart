@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../data/benchmarking_repository.dart';
 
-// Mock companies used in debug-bypass mode (no real Firebase Auth session).
+// Mock companies used in debug-bypass mode.
 const _mockCompanies = [
   CompanySummary(
     id: 'garanti_bbva',
@@ -73,7 +73,14 @@ const _mockCompanies = [
   ),
 ];
 
-// ─── Company search ───────────────────────────────────────────────────────────
+// Selected period: '30d' | '90d' | 'all'
+final selectedPeriodProvider = StateProvider<String>((ref) => '90d');
+
+// All selected companies for comparison (max 6).
+final selectedCompaniesProvider =
+    StateProvider<List<CompanySummary>>((ref) => []);
+
+// ─── Company search ──────────────────────────────────────────────────────────
 
 final companySearchQueryProvider = StateProvider<String>((ref) => '');
 
@@ -82,7 +89,6 @@ final companySearchResultsProvider =
   final query = ref.watch(companySearchQueryProvider);
   if (query.trim().isEmpty) return [];
 
-  // In debug bypass mode, filter the mock list locally — no Firestore needed.
   if (kDebugMode && AppConstants.debugBypassAuth) {
     final q = query.toLowerCase();
     return _mockCompanies
@@ -93,9 +99,3 @@ final companySearchResultsProvider =
   final repo = ref.watch(benchmarkingRepositoryProvider);
   return repo.searchCompanies(query);
 });
-
-// ─── Selected companies for comparison ───────────────────────────────────────────
-
-final selectedCompanyAProvider = StateProvider<CompanySummary?>((ref) => null);
-final selectedCompanyBProvider = StateProvider<CompanySummary?>((ref) => null);
-final activeSlotProvider = StateProvider<String>((ref) => 'A');
