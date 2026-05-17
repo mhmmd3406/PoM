@@ -14,12 +14,10 @@ class CheckinFlowScreen extends ConsumerStatefulWidget {
 
 class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
   final PageController _pageController = PageController();
-  bool _hasCheckedCooldown = false;
 
   @override
   void initState() {
     super.initState();
-    // Reset flow on enter
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(checkinFlowProvider.notifier).reset();
     });
@@ -49,7 +47,6 @@ class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
       notifier.nextStep();
       _goToPage(state.currentStep + 1);
     } else {
-      // Last step — submit
       final result = await notifier.submit();
       if (result != null && mounted) {
         _showSuccessDialog();
@@ -110,7 +107,7 @@ class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
         title: const Text('Haftalık Check-in'),
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
-          onPressed: () => context.pop(),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/'),
         ),
       ),
       body: cooldownAsync.when(
@@ -184,7 +181,7 @@ class _CooldownState extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => context.go('/'),
               icon: const Icon(Icons.arrow_back_rounded),
               label: const Text('Geri Dön'),
               style: ElevatedButton.styleFrom(
@@ -370,7 +367,7 @@ class _ErrorState extends StatelessWidget {
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => context.go('/'),
               child: const Text('Geri Dön'),
             ),
           ],
