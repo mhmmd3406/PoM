@@ -5,8 +5,6 @@ workflows:
     environment:
       flutter: stable
       java: 17
-      vars:
-        FIREBASE_APP_ID: "1:1049001087254:android:6c7969c2a9746c378b4037"
     cache:
       cache_paths:
         - ~/.pub-cache
@@ -27,12 +25,6 @@ workflows:
     artifacts:
       - mobile/build/app/outputs/flutter-apk/app-debug.apk
     publishing:
-      firebase:
-        firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
-        android:
-          app_id: $FIREBASE_APP_ID
-          groups:
-            - testers
       email:
         recipients:
           - ozkanmuhammed8060@gmail.com
