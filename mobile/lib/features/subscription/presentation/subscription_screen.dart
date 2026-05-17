@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -22,8 +22,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   String? _subscribingPlan;
   bool _isCanceling = false;
 
-  // ─── Subscribe ───────────────────────────────────────────────────────────────
-
   Future<void> _subscribe(String planId) async {
     if (_subscribingPlan != null) return;
     setState(() => _subscribingPlan = planId);
@@ -31,27 +29,20 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     try {
       final repo = ref.read(subscriptionRepositoryProvider);
 
-      // 1. Call Cloud Function to create subscription
       final clientSecret = await repo.createSubscription(planId);
 
-      // 2. Initialise Stripe PaymentSheet
       await Stripe.instance.initPaymentSheet(
-        paymentSheetData: SetupPaymentSheetParameters(
+        paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
           merchantDisplayName: 'PoM',
           style: ThemeMode.system,
         ),
       );
 
-      // 3. Present PaymentSheet
       await Stripe.instance.presentPaymentSheet();
 
-      // 4. Success — subscription status updated by webhook
       if (mounted) {
-        _showSuccess(
-          '${_planName(planId)} planına başarıyla geçtiniz!',
-        );
-        // Invalidate to refetch
+        _showSuccess('${_planName(planId)} planına başarıyla geçtiniz!');
         ref.invalidate(subscriptionStreamProvider);
       }
     } on StripeException catch (e) {
@@ -67,8 +58,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       if (mounted) setState(() => _subscribingPlan = null);
     }
   }
-
-  // ─── Cancel ──────────────────────────────────────────────────────────────────
 
   Future<void> _cancelSubscription(SubscriptionModel sub) async {
     final confirmed = await showDialog<bool>(
@@ -141,9 +130,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     }
   }
 
-  String _formatDate(DateTime dt) {
-    return '${dt.day}.${dt.month}.${dt.year}';
-  }
+  String _formatDate(DateTime dt) => '${dt.day}.${dt.month}.${dt.year}';
 
   @override
   Widget build(BuildContext context) {
@@ -161,7 +148,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Current plan banner
                 if (activeSub != null) ...[
                   _CurrentPlanCard(
                     subscription: activeSub,
@@ -170,17 +156,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   ),
                   const SizedBox(height: 24),
                 ],
-
                 Text(
                   'Planlar',
-                  style:
-                      Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 14),
-
-                // Plan cards
                 ..._plans.map((plan) {
                   final currentPlan = user?.role ?? 'free';
                   final isCurrentPlan = currentPlan == plan.id;
@@ -202,7 +185,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     ),
                   );
                 }),
-
                 const SizedBox(height: 24),
                 _BillingNote(),
               ],
@@ -216,14 +198,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   void _contactDaas() async {
     final uri = Uri.parse('mailto:sales@pom.app?subject=DaaS%20İletişim');
     if (!await launchUrl(uri)) {
-      if (mounted) {
-        _showError('E-posta uygulaması açılamadı');
-      }
+      if (mounted) _showError('E-posta uygulaması açılamadı');
     }
   }
 }
-
-// ─── Plan data ────────────────────────────────────────────────────────────────
 
 class _PlanData {
   const _PlanData({
@@ -310,8 +288,6 @@ const _plans = [
   ),
 ];
 
-// ─── Current Plan Card ────────────────────────────────────────────────────────
-
 class _CurrentPlanCard extends StatelessWidget {
   const _CurrentPlanCard({
     required this.subscription,
@@ -345,27 +321,25 @@ class _CurrentPlanCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
+                child: const Text(
                   'Aktif Plan',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
                 ),
               ),
               const Spacer(),
               Text(
                 subscription.statusLabel,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 13,
-                ),
+                style:
+                    const TextStyle(color: Colors.white70, fontSize: 13),
               ),
             ],
           ),
@@ -373,15 +347,13 @@ class _CurrentPlanCard extends StatelessWidget {
           Text(
             subscription.planDisplayName,
             style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-            ),
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w800),
           ),
-          Text(
-            'Dönem sonu: $endDate',
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
-          ),
+          Text('Dönem sonu: $endDate',
+              style:
+                  const TextStyle(color: Colors.white70, fontSize: 13)),
           if (subscription.cancelAtPeriodEnd) ...[
             const SizedBox(height: 8),
             const Text(
@@ -417,8 +389,6 @@ class _CurrentPlanCard extends StatelessWidget {
   }
 }
 
-// ─── Plan Card ────────────────────────────────────────────────────────────────
-
 class _PlanCard extends StatelessWidget {
   const _PlanCard({
     required this.plan,
@@ -452,7 +422,6 @@ class _PlanCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               children: [
                 Text(plan.icon, style: const TextStyle(fontSize: 28)),
@@ -479,13 +448,11 @@ class _PlanCard extends StatelessWidget {
                                 color: scheme.primary,
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text(
-                                'Önerilen',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700),
-                              ),
+                              child: const Text('Önerilen',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700)),
                             ),
                           ],
                           if (isCurrentPlan) ...[
@@ -497,23 +464,18 @@ class _PlanCard extends StatelessWidget {
                                 color: scheme.secondary,
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text(
-                                'Mevcut',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700),
-                              ),
+                              child: const Text('Mevcut',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700)),
                             ),
                           ],
                         ],
                       ),
                       Text(
                         plan.priceLabel,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                               fontWeight: FontWeight.w700,
                               color: plan.badgeColor,
                             ),
@@ -526,33 +488,23 @@ class _PlanCard extends StatelessWidget {
             const SizedBox(height: 14),
             const Divider(height: 1),
             const SizedBox(height: 14),
-
-            // Features
             ...plan.features.map(
               (f) => Padding(
                 padding: const EdgeInsets.only(bottom: 7),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.check_circle_outline_rounded,
-                      size: 18,
-                      color: plan.badgeColor,
-                    ),
+                    Icon(Icons.check_circle_outline_rounded,
+                        size: 18, color: plan.badgeColor),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        f,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
+                        child: Text(f,
+                            style: Theme.of(context).textTheme.bodyMedium)),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-
-            // CTA button
             if (!isCurrentPlan)
               SizedBox(
                 width: double.infinity,
@@ -563,8 +515,7 @@ class _PlanCard extends StatelessWidget {
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: plan.badgeColor.withOpacity(0.4),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   child: isSubscribing
                       ? const SizedBox(
@@ -573,13 +524,11 @@ class _PlanCard extends StatelessWidget {
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         )
-                      : Text(
-                          plan.id == 'daas'
-                              ? 'İletişime Geç'
-                              : plan.price == 0
-                                  ? 'Ücretsiz Başla'
-                                  : '${plan.name} Planına Geç',
-                        ),
+                      : Text(plan.id == 'daas'
+                          ? 'İletişime Geç'
+                          : plan.price == 0
+                              ? 'Ücretsiz Başla'
+                              : '${plan.name} Planına Geç'),
                 ),
               ),
           ],
@@ -588,8 +537,6 @@ class _PlanCard extends StatelessWidget {
     );
   }
 }
-
-// ─── Billing note ─────────────────────────────────────────────────────────────
 
 class _BillingNote extends StatelessWidget {
   @override
@@ -611,9 +558,10 @@ class _BillingNote extends StatelessWidget {
               'Tüm ödemeler Stripe altyapısıyla güvenli şekilde işlenir. '
               'Abonelikler dönem sonunda otomatik yenilenir. '
               'İptal işlemi dönem bitimine kadar hizmetinizi etkilemez.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
         ],
