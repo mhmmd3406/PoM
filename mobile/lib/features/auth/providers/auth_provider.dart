@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/user_model.dart';
 import '../../../core/providers/firebase_providers.dart';
+import '../../../core/constants/app_constants.dart';
 import '../data/auth_repository.dart';
 
 // ─── Auth State ───────────────────────────────────────────────────────────────
@@ -32,6 +33,20 @@ class AuthState {
   }
 }
 
+// ─── Test user (debug bypass only) ───────────────────────────────────────────
+
+const _testUser = UserModel(
+  uid: 'test_user_001',
+  linkedinHash: 'debug_hash_000',
+  displayName: 'Test Kullanıcı',
+  role: 'pro',
+  kvkkAccepted: true,
+  kvkkVersion: '1.0',
+  creditBalance: 150,
+  companyId: 'garanti_bbva',
+  department: 'hq_it',
+);
+
 // ─── Auth State Notifier ──────────────────────────────────────────────────────
 
 class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
@@ -39,7 +54,11 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
 
   @override
   AuthState build() {
-    // Watch Firebase auth state
+    // In debug builds, bypass LinkedIn login with a test user.
+    if (kDebugMode && AppConstants.debugBypassAuth) {
+      return const AuthState(user: _testUser);
+    }
+
     ref.listen(authStateProvider, (previous, next) {
       next.when(
         data: (firebaseUser) async {
@@ -71,24 +90,15 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
     return const AuthState(isLoading: true);
   }
 
-  // Listenable implementation for GoRouter refresh
   @override
-  void addListener(VoidCallback listener) {
-    _listeners.add(listener);
-  }
+  void addListener(VoidCallback listener) => _listeners.add(listener);
 
   @override
-  void removeListener(VoidCallback listener) {
-    _listeners.remove(listener);
-  }
+  void removeListener(VoidCallback listener) => _listeners.remove(listener);
 
   void _notifyListeners() {
-    for (final l in _listeners) {
-      l();
-    }
+    for (final l in _listeners) l();
   }
-
-  // ─── Actions ─────────────────────────────────────────────────────────────────
 
   Future<void> signInWithLinkedIn(String authCode) async {
     state = state.copyWith(isLoading: true, clearError: true);
@@ -106,11 +116,9 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
   Future<void> acceptKvkk() async {
     final uid = state.user?.uid;
     if (uid == null) return;
-
     try {
       final repo = ref.read(authRepositoryProvider);
       await repo.acceptKvkk(uid, '1.0');
-      // Refresh user
       final updated = await repo.getUser(uid);
       state = AuthState(user: updated);
       _notifyListeners();
@@ -149,8 +157,6 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
 
 final authStateNotifierProvider =
     NotifierProvider<AuthStateNotifier, AuthState>(AuthStateNotifier.new);
-
-// ─── Convenience providers ────────────────────────────────────────────────────
 
 final currentUserProvider = Provider<UserModel?>((ref) {
   return ref.watch(authStateNotifierProvider).user;
