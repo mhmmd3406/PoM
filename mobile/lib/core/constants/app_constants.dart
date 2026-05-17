@@ -1,6 +1,9 @@
 class AppConstants {
   AppConstants._();
 
+  // Debug — set to false before releasing to production
+  static const bool debugBypassAuth = true;
+
   // Stripe — replace with real publishable key before going live
   static const String stripePublishableKey = 'pk_live_REPLACE_ME';
 
