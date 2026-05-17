@@ -138,7 +138,13 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     final subscriptionAsync = ref.watch(subscriptionStreamProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Abonelik')),
+      appBar: AppBar(
+        title: const Text('Abonelik'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.go('/'),
+        ),
+      ),
       body: subscriptionAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Hata: $e')),

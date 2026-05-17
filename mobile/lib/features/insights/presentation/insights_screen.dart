@@ -9,7 +9,6 @@ import '../../auth/providers/auth_provider.dart';
 import '../providers/insights_provider.dart';
 import 'radar_chart_widget.dart';
 
-// Expose dimension ordering for use in this file
 const _kDimensionOrder = [
   'overallMood',
   'workStress',
@@ -30,6 +29,10 @@ class InsightsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('İçgörülerim'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.go('/'),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -80,7 +83,6 @@ class _InsightsContent extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Overview card
             _ScoreCard(
               personalAvg: insights.personalAverage,
               companyAvg: insights.companyAverage,
@@ -90,7 +92,6 @@ class _InsightsContent extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // Radar chart
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(20),
@@ -131,7 +132,6 @@ class _InsightsContent extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // Dimension breakdown
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(20),
@@ -376,7 +376,6 @@ class _DimensionRow extends StatelessWidget {
           const SizedBox(height: 6),
           Stack(
             children: [
-              // Background
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
@@ -386,7 +385,6 @@ class _DimensionRow extends StatelessWidget {
                   color: Colors.transparent,
                 ),
               ),
-              // Company bar (if available)
               if (companyScore != null)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
@@ -397,7 +395,6 @@ class _DimensionRow extends StatelessWidget {
                     color: const Color(AppConstants.colorCompany).withOpacity(0.4),
                   ),
                 ),
-              // Personal bar
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
@@ -614,4 +611,3 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
-

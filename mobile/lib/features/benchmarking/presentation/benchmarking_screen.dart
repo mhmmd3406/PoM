@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../data/benchmarking_repository.dart';
@@ -17,13 +18,16 @@ class BenchmarkingScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Şirket Karşılaştırması'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.go('/'),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Intro
             Text(
               'İki şirketi refah boyutlarında yan yana karşılaştırın.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -32,7 +36,6 @@ class BenchmarkingScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
 
-            // Company selectors
             Row(
               children: [
                 Expanded(
@@ -62,11 +65,9 @@ class BenchmarkingScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            // Comparison content
             if (companyA == null && companyB == null)
               const _EmptyState()
             else ...[
-              // Radar comparison
               if (companyA != null && companyB != null) ...[
                 Card(
                   child: Padding(
@@ -103,7 +104,6 @@ class BenchmarkingScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
               ],
 
-              // Side-by-side score cards
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -127,7 +127,6 @@ class BenchmarkingScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
 
-              // Dimension breakdown table
               if (companyA != null &&
                   companyB != null &&
                   companyA.hasEnoughData &&
@@ -517,7 +516,6 @@ class _DimensionTable extends StatelessWidget {
         2: FlexColumnWidth(1),
       },
       children: [
-        // Header
         TableRow(
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest,
@@ -551,7 +549,6 @@ class _DimensionTable extends StatelessWidget {
             ),
           ],
         ),
-        // Dimension rows
         ...List.generate(_dimensionOrder.length, (i) {
           final key = _dimensionOrder[i];
           final scoreA = a.scores?[key] ?? 0;

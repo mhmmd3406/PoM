@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_constants.dart';
@@ -93,7 +94,13 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Cüzdanım')),
+      appBar: AppBar(
+        title: const Text('Cüzdanım'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.go('/'),
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(walletBalanceProvider);
