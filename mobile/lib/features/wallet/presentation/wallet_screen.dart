@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_constants.dart';
@@ -33,26 +33,21 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
 
       final repo = ref.read(walletRepositoryProvider);
 
-      // 1. Create payment intent via Cloud Function
       final clientSecret = await repo.createCreditPaymentIntent(
         priceInTry: priceInTry,
         creditAmount: credits,
       );
 
-      // 2. Initialise Stripe PaymentSheet
       await Stripe.instance.initPaymentSheet(
-        paymentSheetData: SetupPaymentSheetParameters(
+        paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
           merchantDisplayName: 'PoM',
           style: ThemeMode.system,
         ),
       );
 
-      // 3. Present PaymentSheet to user
       await Stripe.instance.presentPaymentSheet();
 
-      // 4. Payment successful – optimistically update balance.
-      //    The Stripe webhook will also update server-side.
       await repo.optimisticCreditUpdate(user.uid, credits);
 
       if (mounted) {
@@ -68,19 +63,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         );
       }
     } on StripeException catch (e) {
-      if (e.error.code == FailureCode.Canceled) {
-        // User cancelled — not an error
-        return;
-      }
+      if (e.error.code == FailureCode.Canceled) return;
       if (mounted) {
         _showErrorSnackbar(
           'Ödeme başarısız: ${e.error.localizedMessage ?? e.error.message ?? 'Bilinmeyen hata'}',
         );
       }
     } catch (e) {
-      if (mounted) {
-        _showErrorSnackbar('Hata: ${e.toString()}');
-      }
+      if (mounted) _showErrorSnackbar('Hata: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _purchasingPackLabel = null);
     }
@@ -115,27 +105,26 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Balance card
               balanceAsync.when(
                 loading: () => _BalanceSkeleton(),
                 error: (e, _) => _BalanceCard(balance: 0, isError: true),
                 data: (balance) => _BalanceCard(balance: balance),
               ),
               const SizedBox(height: 28),
-
-              // Credit packs
               Text(
                 'Kredi Satın Al',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 4),
               Text(
                 'Krediler özellik kilidi açmak ve premium araçlara erişmek için kullanılır.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 14),
               ...AppConstants.creditPacks.asMap().entries.map((entry) {
@@ -143,7 +132,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                 final credits = pack['credits'] as int;
                 final price = pack['price'] as int;
                 final packLabel = pack['label'] as String;
-                final isPopular = entry.key == 1; // 50 credits pack
+                final isPopular = entry.key == 1;
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -164,28 +153,22 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                 );
               }),
               const SizedBox(height: 28),
-
-              // Transaction history
               Text(
                 'İşlem Geçmişi',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 14),
               transactionsAsync.when(
                 loading: () => const _TransactionsSkeleton(),
                 error: (e, _) => Center(
-                  child: Text(
-                    'İşlem geçmişi yüklenemedi',
-                    style:
-                        TextStyle(color: scheme.error),
-                  ),
+                  child: Text('İşlem geçmişi yüklenemedi',
+                      style: TextStyle(color: scheme.error)),
                 ),
                 data: (transactions) {
-                  if (transactions.isEmpty) {
-                    return const _EmptyTransactions();
-                  }
+                  if (transactions.isEmpty) return const _EmptyTransactions();
                   return Column(
                     children: transactions
                         .map((t) => _TransactionTile(transaction: t))
@@ -194,8 +177,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                 },
               ),
               const SizedBox(height: 32),
-
-              // Info note
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -205,11 +186,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.security_rounded,
-                      size: 18,
-                      color: scheme.onSurfaceVariant,
-                    ),
+                    Icon(Icons.security_rounded,
+                        size: 18, color: scheme.onSurfaceVariant),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -230,8 +208,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     );
   }
 }
-
-// ─── Balance Card ─────────────────────────────────────────────────────────────
 
 class _BalanceCard extends StatelessWidget {
   const _BalanceCard({required this.balance, this.isError = false});
@@ -271,29 +247,25 @@ class _BalanceCard extends StatelessWidget {
               const Icon(Icons.account_balance_wallet_rounded,
                   color: Colors.white70, size: 20),
               const SizedBox(width: 8),
-              Text(
-                'Kredi Bakiyesi',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white70,
-                    ),
-              ),
+              Text('Kredi Bakiyesi',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: Colors.white70)),
             ],
           ),
           const SizedBox(height: 12),
           Text(
             isError ? '--' : '$balance',
             style: const TextStyle(
-              color: Colors.white,
-              fontSize: 52,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
+                color: Colors.white,
+                fontSize: 52,
+                fontWeight: FontWeight.w800,
+                height: 1),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'kullanılabilir kredi',
-            style: TextStyle(color: Colors.white70, fontSize: 14),
-          ),
+          const Text('kullanılabilir kredi',
+              style: TextStyle(color: Colors.white70, fontSize: 14)),
         ],
       ),
     );
@@ -315,8 +287,6 @@ class _BalanceSkeleton extends StatelessWidget {
     );
   }
 }
-
-// ─── Credit Pack Card ─────────────────────────────────────────────────────────
 
 class _CreditPackCard extends StatelessWidget {
   const _CreditPackCard({
@@ -355,7 +325,6 @@ class _CreditPackCard extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Icon
                 Container(
                   width: 52,
                   height: 52,
@@ -371,29 +340,23 @@ class _CreditPackCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 14),
-                // Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        label,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
+                      Text(label,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700)),
                       Text(
                         '₺${_pricePerCredit.toStringAsFixed(2)} / kredi',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant),
                       ),
                     ],
                   ),
                 ),
-                // Price & button
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -409,21 +372,18 @@ class _CreditPackCard extends StatelessWidget {
                       width: 88,
                       height: 36,
                       child: ElevatedButton(
-                        onPressed:
-                            (isDisabled || isLoading) ? null : onPurchase,
+                        onPressed: (isDisabled || isLoading) ? null : onPurchase,
                         style: ElevatedButton.styleFrom(
                           minimumSize: Size.zero,
                           padding: EdgeInsets.zero,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(9),
-                          ),
+                              borderRadius: BorderRadius.circular(9)),
                         ),
                         child: isLoading
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2),
+                                child: CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Text('Satın Al',
                                 style: TextStyle(fontSize: 13)),
@@ -440,30 +400,23 @@ class _CreditPackCard extends StatelessWidget {
             top: 0,
             right: 16,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: scheme.primary,
                 borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(8),
-                ),
+                    bottom: Radius.circular(8)),
               ),
-              child: const Text(
-                'Popüler',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              child: const Text('Popüler',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700)),
             ),
           ),
       ],
     );
   }
 }
-
-// ─── Transaction Tile ─────────────────────────────────────────────────────────
 
 class _TransactionTile extends StatelessWidget {
   const _TransactionTile({required this.transaction});
@@ -476,8 +429,8 @@ class _TransactionTile extends StatelessWidget {
     final isCredit = transaction.isCredit;
     final color =
         isCredit ? const Color(0xFF4CAF50) : const Color(0xFFF44336);
-    final dateStr = DateFormat('dd MMM yyyy', 'tr_TR')
-        .format(transaction.createdAt);
+    final dateStr =
+        DateFormat('dd MMM yyyy', 'tr_TR').format(transaction.createdAt);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -498,24 +451,16 @@ class _TransactionTile extends StatelessWidget {
             color: color,
           ),
         ),
-        title: Text(
-          transaction.typeLabel,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+        title: Text(transaction.typeLabel,
+            style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(
           transaction.description ?? dateStr,
-          style: TextStyle(
-            color: scheme.onSurfaceVariant,
-            fontSize: 12,
-          ),
+          style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
         ),
         trailing: Text(
           '${isCredit ? '+' : ''}${transaction.amount}',
           style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-          ),
+              color: color, fontWeight: FontWeight.w700, fontSize: 16),
         ),
       ),
     );
@@ -532,18 +477,14 @@ class _EmptyTransactions extends StatelessWidget {
       child: Center(
         child: Column(
           children: [
-            Icon(
-              Icons.receipt_long_rounded,
-              size: 48,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+            Icon(Icons.receipt_long_rounded,
+                size: 48,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 12),
-            Text(
-              'Henüz işlem yok',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
+            Text('Henüz işlem yok',
+                style: TextStyle(
+                    color:
+                        Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
       ),
