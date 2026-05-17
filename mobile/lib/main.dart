@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/constants/app_constants.dart';
 import 'core/router/app_router.dart';
@@ -13,8 +14,10 @@ void main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // Initialize Turkish locale data for DateFormat.
+  await initializeDateFormatting('tr_TR', null);
+
   // Stripe init is skipped gracefully if the publishable key is a placeholder.
-  // Payment features will be unavailable until a real key is configured.
   final stripeKey = AppConstants.stripePublishableKey;
   if (!stripeKey.contains('REPLACE_ME') && stripeKey.isNotEmpty) {
     try {
