@@ -13,8 +13,15 @@ void main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  Stripe.publishableKey = AppConstants.stripePublishableKey;
-  await Stripe.instance.applySettings();
+  // Stripe init is skipped gracefully if the publishable key is a placeholder.
+  // Payment features will be unavailable until a real key is configured.
+  final stripeKey = AppConstants.stripePublishableKey;
+  if (!stripeKey.contains('REPLACE_ME') && stripeKey.isNotEmpty) {
+    try {
+      Stripe.publishableKey = stripeKey;
+      await Stripe.instance.applySettings();
+    } catch (_) {}
+  }
 
   runApp(const ProviderScope(child: PomApp()));
 }
