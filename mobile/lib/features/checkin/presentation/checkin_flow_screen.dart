@@ -68,10 +68,7 @@ class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         icon: const Text('✅', style: TextStyle(fontSize: 48)),
-        title: const Text(
-          'Tebrikler!',
-          textAlign: TextAlign.center,
-        ),
+        title: const Text('Tebrikler!', textAlign: TextAlign.center),
         content: const Text(
           'Bu haftaki ruh hali anketin başarıyla kaydedildi. '
           'Bir sonraki anketi 7 gün sonra yapabilirsin.',
@@ -132,7 +129,6 @@ class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
 
 class _CooldownState extends StatelessWidget {
   const _CooldownState({required this.remaining});
-
   final Duration remaining;
 
   String _formatDuration(Duration d) {
@@ -213,6 +209,7 @@ class _CheckinFlow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(checkinFlowProvider);
     final scheme = Theme.of(context).colorScheme;
+    final isLastStep = state.currentStep == CheckinFlowState.totalSteps - 1;
 
     return Column(
       children: [
@@ -268,7 +265,16 @@ class _CheckinFlow extends ConsumerWidget {
                   stepData: stepData,
                   selectedValue: state.valueForStep(index),
                   onSelect: (val) {
+                    final currentStep = state.currentStep;
                     ref.read(checkinFlowProvider.notifier).selectAnswer(val);
+                    // Auto-advance to next step after a short delay.
+                    // On the last step the user taps “Tamamla” manually.
+                    if (currentStep < CheckinFlowState.totalSteps - 1) {
+                      Future.delayed(
+                        const Duration(milliseconds: 380),
+                        onNext,
+                      );
+                    }
                   },
                 ),
               );
@@ -302,6 +308,8 @@ class _CheckinFlow extends ConsumerWidget {
           ),
 
         // Navigation buttons
+        // • Steps 1–4: only show “Geri” (emoji tap auto-advances)
+        // • Last step : show “Geri” + “Tamamla”
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           child: Row(
@@ -315,26 +323,25 @@ class _CheckinFlow extends ConsumerWidget {
                     minimumSize: const Size(100, 52),
                   ),
                 ),
-                const SizedBox(width: 12),
+                if (isLastStep) const SizedBox(width: 12),
               ],
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: state.isCurrentStepAnswered && !state.isSubmitting
-                      ? onNext
-                      : null,
-                  child: state.isSubmitting
-                      ? const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.5),
-                        )
-                      : Text(
-                          state.currentStep < CheckinFlowState.totalSteps - 1
-                              ? 'Sonraki'
-                              : 'Tamamla',
-                        ),
+              if (isLastStep)
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed:
+                        state.isCurrentStepAnswered && !state.isSubmitting
+                            ? onNext
+                            : null,
+                    child: state.isSubmitting
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2.5),
+                          )
+                        : const Text('Tamamla'),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -347,7 +354,6 @@ class _CheckinFlow extends ConsumerWidget {
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message});
-
   final String message;
 
   @override
