@@ -2,7 +2,6 @@ workflows:
   android-debug:
     name: PoM Android Debug APK
     max_build_duration: 30
-    clone_depth: 1
     environment:
       flutter: stable
       java: 17
@@ -34,8 +33,6 @@ workflows:
           app_id: $FIREBASE_APP_ID
           groups:
             - testers
-          testers:
-            - ozkanmuhammed8060@gmail.com
       email:
         recipients:
           - ozkanmuhammed8060@gmail.com
