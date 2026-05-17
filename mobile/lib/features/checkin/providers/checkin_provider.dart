@@ -1,10 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../models/checkin_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../data/checkin_repository.dart';
 
-// ─── Check-in flow state ──────────────────────────────────────────────────────
+// ─── Check-in flow state ────────────────────────────────────────────────────────
 
 class CheckinFlowState {
   const CheckinFlowState({
@@ -128,6 +130,26 @@ class CheckinFlowNotifier extends Notifier<CheckinFlowState> {
     }
 
     state = state.copyWith(isSubmitting: true, clearError: true);
+
+    // In debug bypass mode, simulate a successful submission without Firestore.
+    if (kDebugMode && AppConstants.debugBypassAuth) {
+      await Future.delayed(const Duration(milliseconds: 600));
+      final mock = CheckinModel(
+        id: 'debug_${DateTime.now().millisecondsSinceEpoch}',
+        uid: user.uid,
+        overallMood: state.overallMood!,
+        workStress: state.workStress!,
+        teamHarmony: state.teamHarmony!,
+        personalGrowth: state.personalGrowth!,
+        workLifeBalance: state.workLifeBalance!,
+        createdAt: DateTime.now(),
+        companyId: user.companyId,
+        department: user.department,
+      );
+      state = state.copyWith(isSubmitting: false, isComplete: true);
+      return mock;
+    }
+
     try {
       final repo = ref.read(checkinRepositoryProvider);
       final checkin = await repo.submitCheckin(
@@ -160,10 +182,13 @@ final checkinFlowProvider =
     NotifierProvider<CheckinFlowNotifier, CheckinFlowState>(
         CheckinFlowNotifier.new);
 
-// ─── Cooldown provider ────────────────────────────────────────────────────────
+// ─── Cooldown provider ─────────────────────────────────────────────────────────
 
 final checkinCooldownProvider =
     FutureProvider.autoDispose<Duration>((ref) async {
+  // In debug bypass mode, always allow check-in (no cooldown).
+  if (kDebugMode && AppConstants.debugBypassAuth) return Duration.zero;
+
   final user = ref.watch(currentUserProvider);
   if (user == null) return Duration.zero;
 
