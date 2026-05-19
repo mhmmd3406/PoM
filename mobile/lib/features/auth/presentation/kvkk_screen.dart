@@ -69,30 +69,36 @@ class _KvkkScreenState extends ConsumerState<KvkkScreen> {
       body: Column(
         children: [
           // Progress hint banner
-          Container(
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
             width: double.infinity,
-            color: scheme.secondaryContainer,
+            color: _scrolledToEnd
+                ? scheme.secondaryContainer
+                : scheme.primaryContainer,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
                 Icon(
                   _scrolledToEnd
                       ? Icons.check_circle_rounded
-                      : Icons.info_outline_rounded,
+                      : Icons.eco_rounded,
                   size: 18,
                   color: _scrolledToEnd
                       ? scheme.secondary
-                      : scheme.onSecondaryContainer,
+                      : scheme.primary,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _scrolledToEnd
                         ? 'Metni okudunuz. Onaylamak için aşağıdaki butona basın.'
-                        : 'Lütfen onaylamak için metnin tamamını okuyun.',
+                        : 'Verileriniz KVKK kapsamında korunur. Lütfen metni okuyun.',
                     style: TextStyle(
                       fontSize: 13,
-                      color: scheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w500,
+                      color: _scrolledToEnd
+                          ? scheme.onSecondaryContainer
+                          : scheme.onPrimaryContainer,
                     ),
                   ),
                 ),

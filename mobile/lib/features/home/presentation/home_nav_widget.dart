@@ -11,19 +11,7 @@ class HomeNavWidget extends StatelessWidget {
   final int currentIndex;
   final Widget child;
 
-  static const _items = [
-    _NavItem(icon: Icons.home_rounded, label: 'Ana Sayfa', route: '/'),
-    _NavItem(
-        icon: Icons.add_circle_outline_rounded,
-        label: 'Check-in',
-        route: '/checkin'),
-    _NavItem(
-        icon: Icons.insights_rounded, label: 'İçgörüler', route: '/insights'),
-    _NavItem(
-        icon: Icons.account_balance_wallet_rounded,
-        label: 'Cüzdan',
-        route: '/wallet'),
-  ];
+  static const _routes = ['/', '/checkin', '/insights', '/surveys', '/profile'];
 
   @override
   Widget build(BuildContext context) {
@@ -31,30 +19,35 @@ class HomeNavWidget extends StatelessWidget {
       body: child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
-        onDestinationSelected: (index) {
-          context.go(_items[index].route);
-        },
-        destinations: _items
-            .map(
-              (item) => NavigationDestination(
-                icon: Icon(item.icon),
-                label: item.label,
-              ),
-            )
-            .toList(),
+        onDestinationSelected: (index) => context.go(_routes[index]),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Ana Sayfa',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.add_circle_outline_rounded),
+            selectedIcon: Icon(Icons.add_circle_rounded),
+            label: 'Check-in',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights_rounded),
+            label: 'İçgörüler',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.assignment_outlined),
+            selectedIcon: Icon(Icons.assignment_rounded),
+            label: 'Anketler',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Profil',
+          ),
+        ],
       ),
     );
   }
-}
-
-class _NavItem {
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.route,
-  });
-
-  final IconData icon;
-  final String label;
-  final String route;
 }
