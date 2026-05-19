@@ -88,7 +88,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           width: 64,
                           height: 64,
                           decoration: BoxDecoration(
-                            color: isDark ? AppColors.sageSoftDark : AppColors.sageSoft,
+                            color: AppColors.blue,
                             shape: BoxShape.circle,
                           ),
                           alignment: Alignment.center,
@@ -99,7 +99,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   style: GoogleFonts.bricolageGrotesque(
                                     fontSize: 22,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? AppColors.sageDark : AppColors.sageDeep,
+                                    color: Colors.white,
                                   ),
                                 ),
                         ),
@@ -152,11 +152,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   // ── Stats strip ──────────────────────────────────────────────
                   Row(
                     children: [
-                      Expanded(child: _StatCell(label: 'Check-in', value: '12', ink: ink, ink3: ink3, surface: surface, border: border)),
+                      Expanded(child: _StatCell(label: 'CHECK-İN', value: '12', ink: ink, ink3: ink3, surface: surface, border: border)),
                       const SizedBox(width: 8),
-                      Expanded(child: _StatCell(label: 'Anket', value: '8', ink: ink, ink3: ink3, surface: surface, border: border)),
+                      Expanded(child: _StatCell(label: 'ANKET', value: '8', ink: ink, ink3: ink3, surface: surface, border: border)),
                       const SizedBox(width: 8),
-                      Expanded(child: _StatCell(label: 'Refah', value: '4.2', ink: ink, ink3: ink3, surface: surface, border: border)),
+                      Expanded(child: _StatCell(label: 'REFAH', value: '4.2', ink: ink, ink3: ink3, surface: surface, border: border)),
                     ],
                   ),
 

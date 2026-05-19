@@ -224,68 +224,88 @@ class _InsightsContent extends StatelessWidget {
           ),
         ),
 
-        // ── Radar card ────────────────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: _RadarCard(
-              insights: insights,
-              personalList: personalList,
-              companyList: companyList,
-              isDark: isDark,
-              surface: surface,
-              border: border,
-              ink: ink,
-              ink3: ink3,
-            ),
-          ),
-        ),
-
-        // ── Trend lines card ──────────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: _TrendCard(
-              isDark: isDark,
-              surface: surface,
-              border: border,
-              ink: ink,
-              ink2: ink2,
-              ink3: ink3,
-            ),
-          ),
-        ),
-
-        // ── Delta cards ───────────────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: _DeltaSection(
-              insights: insights,
-              isDark: isDark,
-              surface: surface,
-              border: border,
-              ink: ink,
-              ink2: ink2,
-              ink3: ink3,
-            ),
-          ),
-        ),
-
-        // ── Highlights ────────────────────────────────────────────────────────
-        if (strongestMeta != null || weakestMeta != null)
+        if (selectedView != 'comparison') ...[
+          // ── Radar card ──────────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: _HighlightsSection(
-                scores: scores,
-                strongestMeta: strongestMeta,
-                weakestMeta: weakestMeta,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _RadarCard(
+                displayScore: selectedView == 'company'
+                    ? insights.companyAverage
+                    : insights.personalAverage,
+                personalList: personalList,
+                companyList: companyList,
+                isDark: isDark,
+                surface: surface,
+                border: border,
                 ink: ink,
-                ink2: ink2,
+                ink3: ink3,
               ),
             ),
           ),
+
+          // ── Trend lines card ────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _TrendCard(
+                isDark: isDark,
+                surface: surface,
+                border: border,
+                ink: ink,
+                ink2: ink2,
+                ink3: ink3,
+              ),
+            ),
+          ),
+
+          // ── Delta cards ─────────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _DeltaSection(
+                insights: insights,
+                isDark: isDark,
+                surface: surface,
+                border: border,
+                ink: ink,
+                ink2: ink2,
+                ink3: ink3,
+              ),
+            ),
+          ),
+
+          // ── Highlights ──────────────────────────────────────────────────────
+          if (strongestMeta != null || weakestMeta != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _HighlightsSection(
+                  scores: scores,
+                  strongestMeta: strongestMeta,
+                  weakestMeta: weakestMeta,
+                  ink: ink,
+                  ink2: ink2,
+                ),
+              ),
+            ),
+        ] else ...[
+          // ── Comparison content ──────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _ComparisonSection(
+                isDark: isDark,
+                surface: surface,
+                border: border,
+                ink: ink,
+                ink2: ink2,
+                ink3: ink3,
+                bgAlt: bgAlt,
+              ),
+            ),
+          ),
+        ],
 
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
@@ -340,6 +360,14 @@ class _TogglePill extends StatelessWidget {
             ink: ink,
             ink3: ink3,
             onTap: () => onChanged('company'),
+          ),
+          _PillSegment(
+            label: 'Karşılaştırma',
+            active: selected == 'comparison',
+            surface: surface,
+            ink: ink,
+            ink3: ink3,
+            onTap: () => onChanged('comparison'),
           ),
         ],
       ),
@@ -403,7 +431,7 @@ class _PillSegment extends StatelessWidget {
 
 class _RadarCard extends StatelessWidget {
   const _RadarCard({
-    required this.insights,
+    required this.displayScore,
     required this.personalList,
     required this.companyList,
     required this.isDark,
@@ -413,7 +441,7 @@ class _RadarCard extends StatelessWidget {
     required this.ink3,
   });
 
-  final InsightModel insights;
+  final double displayScore;
   final List<double> personalList;
   final List<double>? companyList;
   final bool isDark;
@@ -424,7 +452,7 @@ class _RadarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avg = insights.personalAverage;
+    final avg = displayScore;
 
     return Container(
       decoration: BoxDecoration(
@@ -1171,7 +1199,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              'Henüz veri yok',
+              'Henüz check-in yok',
               style: GoogleFonts.bricolageGrotesque(
                 fontSize: 22,
                 fontWeight: FontWeight.w600,
@@ -1180,7 +1208,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'İçgörülerin burada görüntülenmesi\niçin ilk check-in\'ini yap.',
+              'İlk haftalık check-in\'ini yaparak refah yolculuğuna başla. Sadece 60 saniye sürer.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -1200,7 +1228,7 @@ class _EmptyState extends StatelessWidget {
                 ),
               ),
               child: const Text(
-                'İlk check-in\'ini yap',
+                'İlk Check-in\'i Yap',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
@@ -1300,6 +1328,497 @@ class _SkeletonBox extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── Comparison section ────────────────────────────────────────────────────────
+
+const _kDeptRows = [
+  ('Mühendislik', 4.2),
+  ('Ürün',        4.0),
+  ('Satış',       3.5),
+  ('Tasarım',     4.3),
+  ('Müşteri Hiz.', 3.2),
+];
+
+// 12-week fake data: Şirket + Sektör
+const _k12wSirket = [3.4, 3.5, 3.6, 3.5, 3.7, 3.8, 3.7, 3.8, 3.9, 3.8, 3.9, 3.9];
+const _k12wSektor = [3.4, 3.4, 3.5, 3.5, 3.5, 3.6, 3.5, 3.6, 3.6, 3.6, 3.6, 3.6];
+
+class _ComparisonSection extends StatelessWidget {
+  const _ComparisonSection({
+    required this.isDark,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+    required this.bgAlt,
+  });
+
+  final bool isDark;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink2;
+  final Color ink3;
+  final Color bgAlt;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Participation hero card ──────────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'KATILIM ORANI',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: ink3,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '78%',
+                    style: GoogleFonts.bricolageGrotesque(
+                      fontSize: 44,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.blue,
+                      height: 1.0,
+                      letterSpacing: -2,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.sageWash,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        '↑ +12% geçen aya',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.sageDeep,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '289 / 372 çalışan · bu hafta',
+                style: TextStyle(fontSize: 13, color: ink2),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // ── Department heatmap ───────────────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'DEPARTMAN · BU HAFTA',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: ink3,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: bgAlt,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'n ≥ 10 görünür',
+                      style: TextStyle(fontSize: 10, color: ink3, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...List.generate(_kDeptRows.length, (i) {
+                final (name, score) = _kDeptRows[i];
+                final color = score >= 4.0
+                    ? AppColors.sage
+                    : score >= 3.5
+                        ? AppColors.blue
+                        : AppColors.amber;
+                final bgColor = score >= 4.0
+                    ? AppColors.sageWash
+                    : score >= 3.5
+                        ? AppColors.blueSoft
+                        : AppColors.amberWash;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: i < _kDeptRows.length - 1 ? 10 : 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: TextStyle(fontSize: 14, color: ink, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          score.toStringAsFixed(1),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                            fontFamily: 'JetBrainsMono',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'İK',
+                        style: TextStyle(fontSize: 14, color: ink, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    Text('—', style: TextStyle(fontSize: 14, color: ink3)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // ── 12-week trend chart ──────────────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '12 HAFTALIK TREND',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: ink3,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 2,
+                        color: AppColors.blue,
+                      ),
+                      const SizedBox(width: 4),
+                      Text('Şirket', style: TextStyle(fontSize: 11, color: ink3)),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 12,
+                        child: Row(
+                          children: List.generate(3, (i) => Expanded(
+                            child: Container(
+                              height: 2,
+                              margin: EdgeInsets.only(right: i < 2 ? 2 : 0),
+                              color: AppColors.amber,
+                            ),
+                          )),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text('Sektör', style: TextStyle(fontSize: 11, color: ink3)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 120,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _Comparison12wPainter(
+                    isDark: isDark,
+                    dividerColor: isDark ? AppColors.dividerDark : AppColors.dividerLight,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // ── Sector comparison card ───────────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.blueSoftDark : const Color(0xFFEBF2FB),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.blue.withValues(alpha: 0.25)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'ŞİRKET VS SEKTÖR ORTALAMASI',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.blueDeep,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Şirketin', style: TextStyle(fontSize: 12, color: ink2)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '3.9',
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.blue,
+                            height: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Sektör (Teknoloji)', style: TextStyle(fontSize: 12, color: ink2)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '3.6',
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: ink2,
+                            height: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.sageWash,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      '+0.3',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.sageDeep,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Sektör ortalamasının üstündesin. Son 12 haftada en güçlü performansını gösterdin.',
+                style: TextStyle(fontSize: 13, color: ink2, height: 1.5),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'n = 8 · gizli',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: ink3,
+                  fontFamily: 'JetBrainsMono',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── 12-week comparison chart painter ─────────────────────────────────────────
+
+class _Comparison12wPainter extends CustomPainter {
+  const _Comparison12wPainter({
+    required this.isDark,
+    required this.dividerColor,
+  });
+
+  final bool isDark;
+  final Color dividerColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const leftPad  = 24.0;
+    const rightPad = 8.0;
+    const topPad   = 6.0;
+    const bottomPad = 20.0;
+    const minY = 2.0;
+    const maxY = 5.0;
+
+    final chartW = size.width  - leftPad - rightPad;
+    final chartH = size.height - topPad  - bottomPad;
+    final n = _k12wSirket.length;
+
+    double xOf(int i) => leftPad + i * chartW / (n - 1);
+    double yOf(double v) => topPad + (1 - (v - minY) / (maxY - minY)) * chartH;
+
+    final gridPaint = Paint()
+      ..color = dividerColor
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    final labelStyle = TextStyle(
+      color: isDark ? AppColors.darkInk3 : AppColors.lightInk3,
+      fontSize: 9,
+      fontWeight: FontWeight.w500,
+    );
+
+    for (final yVal in [3.0, 4.0]) {
+      final y = yOf(yVal);
+      canvas.drawLine(Offset(leftPad, y), Offset(leftPad + chartW, y), gridPaint);
+      final tp = TextPainter(
+        text: TextSpan(text: yVal.toInt().toString(), style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(0, y - tp.height / 2));
+    }
+
+    // X labels at week 1, 4, 8, 12
+    for (final (i, label) in [(0, 'H1'), (3, 'H4'), (7, 'H8'), (11, 'H12')]) {
+      final tp = TextPainter(
+        text: TextSpan(text: label, style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(xOf(i) - tp.width / 2, topPad + chartH + 6));
+    }
+
+    // Şirket line (solid blue)
+    final sirketPaint = Paint()
+      ..color = AppColors.blue
+      ..strokeWidth = 2.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final sirketPath = Path();
+    for (int i = 0; i < n; i++) {
+      final x = xOf(i);
+      final y = yOf(_k12wSirket[i]);
+      i == 0 ? sirketPath.moveTo(x, y) : sirketPath.lineTo(x, y);
+    }
+    canvas.drawPath(sirketPath, sirketPaint);
+
+    // Sektör line (dashed amber)
+    final sektorPaint = Paint()
+      ..color = AppColors.amber
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    const dashLen = 5.0;
+    const gapLen  = 3.0;
+    bool drawing = true;
+
+    final sektorPath = Path();
+    for (int i = 1; i < n; i++) {
+      final x0 = xOf(i - 1); final y0 = yOf(_k12wSektor[i - 1]);
+      final x1 = xOf(i);     final y1 = yOf(_k12wSektor[i]);
+      final dx = x1 - x0;    final dy = y1 - y0;
+      // Simple approximation: draw dash segments
+      double t = 0;
+      while (t < 1) {
+        if (drawing) {
+          final tEnd = (t + dashLen / (dx.abs().clamp(1, double.infinity))).clamp(0.0, 1.0);
+          sektorPath.moveTo(x0 + t * dx, y0 + t * dy);
+          sektorPath.lineTo(x0 + tEnd * dx, y0 + tEnd * dy);
+          t = tEnd;
+        } else {
+          t += gapLen / (dx.abs().clamp(1, double.infinity));
+        }
+        drawing = !drawing;
+      }
+    }
+    canvas.drawPath(sektorPath, sektorPaint);
+
+    // Dots at endpoints for Şirket
+    for (final i in [0, n - 1]) {
+      final x = xOf(i); final y = yOf(_k12wSirket[i]);
+      canvas.drawCircle(Offset(x, y), 3.5, Paint()..color = Colors.white);
+      canvas.drawCircle(Offset(x, y), 3.5,
+          Paint()..color = AppColors.blue..strokeWidth = 1.8..style = PaintingStyle.stroke);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Comparison12wPainter old) =>
+      old.isDark != isDark || old.dividerColor != dividerColor;
 }
 
 // ─── Dimension metadata value type ────────────────────────────────────────────

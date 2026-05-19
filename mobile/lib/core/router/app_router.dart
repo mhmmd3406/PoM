@@ -13,6 +13,7 @@ import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/subscription/presentation/subscription_screen.dart';
+import '../../features/surveys/presentation/survey_answer_screen.dart';
 import '../../features/surveys/presentation/surveys_screen.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
 
@@ -27,8 +28,9 @@ class AppRoutes {
   static const profile      = '/profile';
   static const wallet       = '/wallet';
   static const subscription = '/subscription';
-  static const benchmarking = '/benchmarking';
-  static const reports      = '/reports';
+  static const benchmarking  = '/benchmarking';
+  static const reports       = '/reports';
+  static const surveyAnswer  = '/survey/:id/answer';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -119,6 +121,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.reports,
         builder: (context, state) => const ReportsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.surveyAnswer,
+        builder: (context, state) => SurveyAnswerScreen(
+          surveyId: state.pathParameters['id'] ?? '',
+        ),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

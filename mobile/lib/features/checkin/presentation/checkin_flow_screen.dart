@@ -56,8 +56,13 @@ class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
       if (result != null && mounted) {
         setState(() {
           _showSuccess = true;
-          _resultScores = result.personalScores
-              .map((k, v) => MapEntry(k, v));
+          _resultScores = {
+                'Genel Ruh Hali': result.overallMood.toDouble(),
+                'İş Stresi': result.workStress.toDouble(),
+                'Takım Uyumu': result.teamHarmony.toDouble(),
+                'Kişisel Gelişim': result.personalGrowth.toDouble(),
+                'İş-Yaşam Dengesi': result.workLifeBalance.toDouble(),
+              };
         });
       }
     }

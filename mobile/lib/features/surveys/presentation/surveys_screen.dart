@@ -206,20 +206,22 @@ class _SurveysScreenState extends State<SurveysScreen> {
 
             // Survey list
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                itemCount: surveys.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, i) => _SurveyCard(
-                  item: surveys[i],
-                  isDark: isDark,
-                  surface: surface,
-                  border: border,
-                  ink: ink,
-                  ink3: ink3,
-                  bgAlt: bgAlt,
-                ),
-              ),
+              child: surveys.isEmpty
+                  ? _SurveysEmptyState(activeTab: _activeTab, ink: ink, ink3: ink3)
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                      itemCount: surveys.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, i) => _SurveyCard(
+                        item: surveys[i],
+                        isDark: isDark,
+                        surface: surface,
+                        border: border,
+                        ink: ink,
+                        ink3: ink3,
+                        bgAlt: bgAlt,
+                      ),
+                    ),
             ),
           ],
         ),
@@ -257,6 +259,58 @@ class _SurveysScreenState extends State<SurveysScreen> {
             label: 'Profil',
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Empty state ───────────────────────────────────────────────────────────────
+
+class _SurveysEmptyState extends StatelessWidget {
+  const _SurveysEmptyState({
+    required this.activeTab,
+    required this.ink,
+    required this.ink3,
+  });
+
+  final String activeTab;
+  final Color ink;
+  final Color ink3;
+
+  @override
+  Widget build(BuildContext context) {
+    final (emoji, title, subtitle) = switch (activeTab) {
+      'draft'     => ('✏️', 'Taslak anket yok', 'Henüz taslak oluşturulmadı.'),
+      'completed' => ('📋', 'Tamamlanan anket yok', 'Tamamlanan anketler burada görünecek.'),
+      _           => ('📭', 'Şu an anket yok', 'Aktif anket bulunmuyor.\nBir sonraki anket yakında gelecek.'),
+    };
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 52)),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: ink,
+                letterSpacing: -0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: TextStyle(fontSize: 13, color: ink3, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -363,7 +417,10 @@ class _SurveyCard extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {},
+        onTap: item.isDraft ? null : () {
+          final id = item.title.toLowerCase().replaceAll(' ', '-');
+          context.push('/survey/$id/answer');
+        },
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
