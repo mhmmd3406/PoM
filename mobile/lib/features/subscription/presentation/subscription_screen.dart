@@ -4,7 +4,6 @@ import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/constants/app_constants.dart';
 import '../../../models/subscription_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../data/subscription_repository.dart';

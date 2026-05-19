@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../models/insight_model.dart';
-import '../../auth/providers/auth_provider.dart';
 import '../providers/insights_provider.dart';
 import 'radar_chart_widget.dart';
 
@@ -27,7 +26,7 @@ const _kDimensionMeta = [
   _DimensionMeta(key: 'workLifeBalance',  label: 'Denge',    emoji: '⚖️', color: AppColors.blue),
 ];
 
-const _kFakeDeltas = [+0.4, -0.2, +0.5, +0.0, +0.3];
+const _kFakeDeltas = [0.4, -0.2, 0.5, 0.0, 0.3];
 
 // Trend chart series data
 const _kTrendSeries = [

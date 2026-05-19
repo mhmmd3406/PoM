@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +9,6 @@ import '../../../models/insight_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../checkin/providers/checkin_provider.dart';
 import '../../insights/providers/insights_provider.dart';
-import '../../wallet/providers/wallet_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -18,7 +18,6 @@ class HomeScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final insightsAsync = ref.watch(insightsStreamProvider);
     final cooldownAsync = ref.watch(checkinCooldownProvider);
-    final balanceAsync = ref.watch(walletBalanceProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
@@ -29,6 +28,15 @@ class HomeScreen extends ConsumerWidget {
     final border = isDark ? AppColors.borderDark : AppColors.borderLight;
 
     final firstName = user?.displayName?.split(' ').first ?? 'Merhaba';
+    final initials = (user?.displayName?.isNotEmpty == true)
+        ? user!.displayName!
+            .trim()
+            .split(' ')
+            .where((p) => p.isNotEmpty)
+            .take(2)
+            .map((p) => p[0].toUpperCase())
+            .join()
+        : '?';
 
     return Scaffold(
       backgroundColor: bg,
@@ -37,77 +45,50 @@ class HomeScreen extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(insightsStreamProvider);
             ref.invalidate(checkinCooldownProvider);
-            ref.invalidate(walletBalanceProvider);
           },
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              // App bar
+              // ── App bar ──────────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 16, 20, 0),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _greeting(),
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: ink3,
-                              ),
-                            ),
-                            Text(
-                              firstName,
-                              style: GoogleFonts.bricolageGrotesque(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w600,
-                                color: ink,
-                                letterSpacing: -0.6,
-                                height: 1.1,
-                              ),
-                            ),
-                          ],
+                      // PoM logo mark
+                      _PomLogoMark(),
+                      const SizedBox(width: 8),
+                      Text(
+                        'PoM',
+                        style: GoogleFonts.bricolageGrotesque(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: ink,
                         ),
                       ),
-                      // Credit chip
-                      balanceAsync.whenOrNull(
-                        data: (balance) => Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppColors.blueSoftDark
-                                : AppColors.blueSoft,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.stars_rounded,
-                                  size: 14, color: AppColors.blue),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$balance kr',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.blue,
-                                ),
-                              ),
-                            ],
-                          ),
+                      const Spacer(),
+                      // Bell icon
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppColors.darkSurface
+                              : AppColors.lightSurface,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: border),
                         ),
-                      ) ?? const SizedBox.shrink(),
-                      const SizedBox(width: 8),
+                        child: Icon(Icons.notifications_outlined,
+                            size: 18, color: ink2),
+                      ),
+                      const SizedBox(width: 10),
                       // Avatar
                       GestureDetector(
-                        onTap: () => _showProfileSheet(context, ref),
+                        onTap: () => _showProfileSheet(context, ref,
+                            user: user, isDark: isDark, ink: ink, ink2: ink2,
+                            surface: surface, border: border),
                         child: CircleAvatar(
-                          radius: 18,
+                          radius: 19,
                           backgroundColor: isDark
                               ? AppColors.sageSoftDark
                               : AppColors.sageSoft,
@@ -116,11 +97,9 @@ class HomeScreen extends ConsumerWidget {
                               : null,
                           child: user?.avatarUrl == null
                               ? Text(
-                                  (user?.displayName?.isNotEmpty == true)
-                                      ? user!.displayName![0].toUpperCase()
-                                      : '?',
+                                  initials,
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w700,
                                     color: isDark
                                         ? AppColors.sageDark
@@ -135,14 +114,60 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-              // Hero check-in card
+              // ── Greeting ─────────────────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_greeting()}, $firstName',
+                        style: TextStyle(fontSize: 14, color: ink3),
+                      ),
+                      const SizedBox(height: 4),
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Bu hafta nasıl\n',
+                              style: GoogleFonts.bricolageGrotesque(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: ink,
+                                letterSpacing: -0.5,
+                                height: 1.15,
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'hissediyorsun?',
+                              style: GoogleFonts.bricolageGrotesque(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                fontStyle: FontStyle.italic,
+                                color: AppColors.blue,
+                                letterSpacing: -0.5,
+                                height: 1.15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+              // ── Check-in hero card ────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: cooldownAsync.when(
-                    loading: () => _SkeletonCard(height: 110, isDark: isDark),
+                    loading: () => _SkeletonCard(height: 120, isDark: isDark),
                     error: (_, __) => const SizedBox.shrink(),
                     data: (remaining) => _HeroCheckinCard(
                       remaining: remaining,
@@ -153,19 +178,19 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              const SliverToBoxAdapter(child: SizedBox(height: 14)),
 
-              // Last check-in stats
+              // ── Insights card ─────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: insightsAsync.when(
-                    loading: () => _SkeletonCard(height: 80, isDark: isDark),
+                    loading: () => _SkeletonCard(height: 200, isDark: isDark),
                     error: (_, __) => const SizedBox.shrink(),
                     data: (insights) {
                       if (insights == null) return const SizedBox.shrink();
-                      return _LastCheckinCard(
-                        insights: insights!,
+                      return _InsightsCard(
+                        insights: insights,
                         surface: surface,
                         border: border,
                         ink: ink,
@@ -178,63 +203,40 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              const SliverToBoxAdapter(child: SizedBox(height: 14)),
 
-              // Quick actions header
+              // ── Bottom row: Company pulse + Survey card ──────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    'Hızlı Erişim',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: ink,
+                  child: insightsAsync.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (insights) => Row(
+                      children: [
+                        Expanded(
+                          child: _CompanyPulseCard(
+                            companyAvg:
+                                insights?.companyAverage ?? 3.9,
+                            isDark: isDark,
+                            ink: ink,
+                            ink2: ink2,
+                            ink3: ink3,
+                            surface: surface,
+                            border: border,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _NewSurveyCard(
+                            isDark: isDark,
+                            ink: ink,
+                            onTap: () => context.go('/surveys'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-              // Quick action grid
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                sliver: SliverGrid.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.65,
-                  children: [
-                    _QuickActionCard(
-                      emoji: '📊',
-                      label: 'İçgörülerim',
-                      bg: isDark ? AppColors.blueSoftDark : AppColors.blueSoft,
-                      labelColor: isDark ? AppColors.blueDark : AppColors.blueDeep,
-                      onTap: () => context.go('/insights'),
-                    ),
-                    _QuickActionCard(
-                      emoji: '📋',
-                      label: 'Anketler',
-                      bg: isDark ? AppColors.sageSoftDark : AppColors.sageSoft,
-                      labelColor: isDark ? AppColors.sageDark : AppColors.sageDeep,
-                      onTap: () => context.go('/surveys'),
-                    ),
-                    _QuickActionCard(
-                      emoji: '💳',
-                      label: 'Cüzdanım',
-                      bg: isDark ? AppColors.amberSoftDark : AppColors.amberSoft,
-                      labelColor: AppColors.amberDeep,
-                      onTap: () => context.go('/wallet'),
-                    ),
-                    _QuickActionCard(
-                      emoji: '🏅',
-                      label: 'Karşılaştır',
-                      bg: isDark ? AppColors.darkSurfaceSoft : AppColors.lightSurfaceSoft,
-                      labelColor: ink2,
-                      onTap: () => context.go('/benchmarking'),
-                    ),
-                  ],
                 ),
               ),
 
@@ -282,18 +284,21 @@ class HomeScreen extends ConsumerWidget {
 
   String _greeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Günaydın,';
-    if (hour < 18) return 'İyi günler,';
-    return 'İyi akşamlar,';
+    if (hour < 12) return 'Günaydın';
+    if (hour < 18) return 'İyi günler';
+    return 'İyi akşamlar';
   }
 
-  void _showProfileSheet(BuildContext context, WidgetRef ref) {
-    final user = ref.read(currentUserProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final ink = isDark ? AppColors.darkInk : AppColors.lightInk;
-    final ink2 = isDark ? AppColors.darkInk2 : AppColors.lightInk2;
-    final surface = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-
+  void _showProfileSheet(
+    BuildContext context,
+    WidgetRef ref, {
+    required dynamic user,
+    required bool isDark,
+    required Color ink,
+    required Color ink2,
+    required Color surface,
+    required Color border,
+  }) {
     showModalBottomSheet(
       context: context,
       backgroundColor: surface,
@@ -310,13 +315,14 @@ class HomeScreen extends ConsumerWidget {
               height: 4,
               margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                color: border,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             CircleAvatar(
               radius: 32,
-              backgroundColor: isDark ? AppColors.sageSoftDark : AppColors.sageSoft,
+              backgroundColor:
+                  isDark ? AppColors.sageSoftDark : AppColors.sageSoft,
               backgroundImage: user?.avatarUrl != null
                   ? NetworkImage(user!.avatarUrl!)
                   : null,
@@ -325,7 +331,8 @@ class HomeScreen extends ConsumerWidget {
                       (user?.displayName?.isNotEmpty == true)
                           ? user!.displayName![0].toUpperCase()
                           : '?',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: ink),
+                      style: TextStyle(
+                          fontSize: 24, fontWeight: FontWeight.w700, color: ink),
                     )
                   : null,
             ),
@@ -333,10 +340,7 @@ class HomeScreen extends ConsumerWidget {
             Text(
               user?.displayName ?? 'İsimsiz Kullanıcı',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: ink,
-              ),
+                  fontSize: 18, fontWeight: FontWeight.w700, color: ink),
             ),
             if (user?.email != null) ...[
               const SizedBox(height: 4),
@@ -359,7 +363,39 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-// ─── Hero Check-in Card ────────────────────────────────────────────────────────
+// ─── PoM Logo Mark ────────────────────────────────────────────────────────────
+
+class _PomLogoMark extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: const BoxDecoration(
+        color: AppColors.blue,
+        shape: BoxShape.circle,
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: 4,
+            bottom: 4,
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                color: AppColors.sage,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Hero Check-in Card ───────────────────────────────────────────────────────
 
 class _HeroCheckinCard extends StatelessWidget {
   const _HeroCheckinCard({
@@ -382,86 +418,95 @@ class _HeroCheckinCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.blue, AppColors.blueDeep],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: AppColors.blue,
             borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.blue.withValues(alpha: 0.35),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
-          child: Row(
+          child: Stack(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'Bu haftanın sorusu hazır',
-                        style: TextStyle(
+              // Decorative circle
+              Positioned(
+                right: -10,
+                bottom: -10,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: AppColors.blueDeep.withValues(alpha: 0.35),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('✦', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'HAFTALIK CHECK-IN',
+                        style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.2,
+                          color: Colors.white70,
+                          letterSpacing: 0.6,
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '60 saniyen var mı?',
+                    style: GoogleFonts.bricolageGrotesque(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: -0.3,
+                      height: 1.15,
                     ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      '60 saniyen\nvar mı?',
-                      style: TextStyle(
-                        fontFamily: 'BricolageGrotesque',
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                        height: 1.15,
-                        letterSpacing: -0.5,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '5 hızlı soru · anonim',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.white70,
                     ),
-                    const SizedBox(height: 12),
-                    Row(
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'Check-in\'i Başlat',
+                        Text(
+                          'Başla',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            color: AppColors.blue,
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Icon(
-                          Icons.arrow_forward_rounded,
-                          color: Colors.white,
-                          size: 16,
-                        ),
+                        Icon(Icons.arrow_forward_rounded,
+                            size: 14, color: AppColors.blue),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              const Text('✨', style: TextStyle(fontSize: 52)),
             ],
           ),
         ),
       );
     }
 
-    // Cooldown state
+    // Cooldown
     final days = remaining.inDays;
     final hours = remaining.inHours % 24;
     final mins = remaining.inMinutes % 60;
@@ -471,11 +516,12 @@ class _HeroCheckinCard extends StatelessWidget {
             ? '$hours saat $mins dk'
             : '$mins dakika';
 
-    final bgColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final ink = isDark ? AppColors.darkInk : AppColors.lightInk;
-    final ink2 = isDark ? AppColors.darkInk2 : AppColors.lightInk2;
-    final ink3 = isDark ? AppColors.darkInk3 : AppColors.lightInk3;
-    final border = isDark ? AppColors.borderDark : AppColors.borderLight;
+    final isDarkLocal = isDark;
+    final bgColor =
+        isDarkLocal ? AppColors.darkSurface : AppColors.lightSurface;
+    final ink2 = isDarkLocal ? AppColors.darkInk2 : AppColors.lightInk2;
+    final ink = isDarkLocal ? AppColors.darkInk : AppColors.lightInk;
+    final border = isDarkLocal ? AppColors.borderDark : AppColors.borderLight;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -490,7 +536,7 @@ class _HeroCheckinCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: isDark ? AppColors.blueWashDark : AppColors.blueWash,
+              color: isDarkLocal ? AppColors.blueWashDark : AppColors.blueWash,
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.schedule_rounded,
@@ -504,25 +550,18 @@ class _HeroCheckinCard extends StatelessWidget {
                 Text(
                   'Bir Sonraki Check-in',
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: ink,
-                  ),
+                      fontSize: 14, fontWeight: FontWeight.w700, color: ink),
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  '$timeStr sonra',
-                  style: TextStyle(fontSize: 13, color: ink2),
-                ),
+                Text('$timeStr sonra',
+                    style: TextStyle(fontSize: 13, color: ink2)),
               ],
             ),
           ),
           TextButton(
-            onPressed: () => context.go('/insights'),
-            child: Text(
-              'İçgörüler',
-              style: TextStyle(fontSize: 13, color: AppColors.blue),
-            ),
+            onPressed: () => GoRouter.of(context).go('/insights'),
+            child: Text('İçgörüler',
+                style: TextStyle(fontSize: 13, color: AppColors.blue)),
           ),
         ],
       ),
@@ -530,10 +569,10 @@ class _HeroCheckinCard extends StatelessWidget {
   }
 }
 
-// ─── Last Check-in Card ───────────────────────────────────────────────────────
+// ─── Insights card (radar + scores + chips) ───────────────────────────────────
 
-class _LastCheckinCard extends StatelessWidget {
-  const _LastCheckinCard({
+class _InsightsCard extends StatelessWidget {
+  const _InsightsCard({
     required this.insights,
     required this.surface,
     required this.border,
@@ -551,17 +590,20 @@ class _LastCheckinCard extends StatelessWidget {
   final Color ink3;
   final bool isDark;
 
-  Color _scoreColor(double score) {
-    if (score >= 4) return AppColors.sage;
-    if (score >= 3) return AppColors.amber;
-    return AppColors.rose;
-  }
+  static const _dimensions = [
+    ('😊', 'Ruh Hali'),
+    ('😌', 'Stres'),
+    ('🤝', 'Takım'),
+    ('🌱', 'Gelişim'),
+    ('⚖️', 'Denge'),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final avg = insights.personalAverage;
-    final total = insights.totalCheckins;
     final trend = insights.trend;
+    final scores = insights.personalList; // list of 5 values 1-5
+    final normalized = scores.map((s) => (s / 5.0).clamp(0.0, 1.0)).toList();
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -570,88 +612,128 @@ class _LastCheckinCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Score
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Radar + score row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                'Son Check-in',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: ink3,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    avg.toStringAsFixed(1),
-                    style: GoogleFonts.bricolageGrotesque(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w600,
-                      color: _scoreColor(avg),
-                      height: 1,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      '/5',
-                      style: TextStyle(fontSize: 14, color: ink3),
-                    ),
-                  ),
-                ],
-              ),
-              if (trend != null) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: trend >= 0
-                        ? (isDark ? AppColors.sageSoftDark : AppColors.sageSoft)
-                        : (isDark ? AppColors.amberSoftDark : AppColors.amberSoft),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    trend > 0 ? '↑ İyileşiyor' : trend < 0 ? '↓ Düşüyor' : '→ Sabit',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: trend >= 0 ? AppColors.sageDeep : AppColors.amberDeep,
-                    ),
+              // Pentagon radar chart
+              SizedBox(
+                width: 90,
+                height: 90,
+                child: CustomPaint(
+                  painter: _RadarPainter(
+                    values: normalized,
+                    color: AppColors.blue,
+                    isDark: isDark,
                   ),
                 ),
-              ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'GEÇEN HAFTA',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: ink3,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          avg.toStringAsFixed(1),
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w700,
+                            color: ink,
+                            height: 1,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text('/5',
+                              style: TextStyle(fontSize: 14, color: ink3)),
+                        ),
+                      ],
+                    ),
+                    if (trend != null) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: trend >= 0
+                              ? (isDark
+                                  ? AppColors.sageSoftDark
+                                  : AppColors.sageSoft)
+                              : (isDark
+                                  ? AppColors.amberSoftDark
+                                  : AppColors.amberSoft),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          trend > 0
+                              ? '↑ +0.3 geçen haftaya göre'
+                              : trend < 0
+                                  ? '↓ Geçen haftaya göre'
+                                  : '→ Sabit',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: trend >= 0
+                                ? AppColors.sageDeep
+                                : AppColors.amberDeep,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(width: 20),
-          // Divider
-          Container(width: 1, height: 60, color: border),
-          const SizedBox(width: 20),
-          // Stats
-          Expanded(
-            child: Column(
-              children: [
-                _StatRow(
-                  label: 'Toplam',
-                  value: '$total check-in',
-                  ink: ink,
-                  ink3: ink3,
+
+          const SizedBox(height: 16),
+
+          // Dimension emoji chips
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(_dimensions.length, (i) {
+              final (emoji, label) = _dimensions[i];
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkBgAlt : AppColors.lightBgAlt,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const SizedBox(height: 8),
-                _StatRow(
-                  label: 'Streak',
-                  value: '3 hafta',
-                  ink: ink,
-                  ink3: ink3,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 14)),
+                    const SizedBox(width: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: ink2,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            }),
           ),
         ],
       ),
@@ -659,53 +741,170 @@ class _LastCheckinCard extends StatelessWidget {
   }
 }
 
-class _StatRow extends StatelessWidget {
-  const _StatRow({
-    required this.label,
-    required this.value,
-    required this.ink,
-    required this.ink3,
+// ─── Radar chart painter ─────────────────────────────────────────────────────
+
+class _RadarPainter extends CustomPainter {
+  const _RadarPainter({
+    required this.values,
+    required this.color,
+    required this.isDark,
   });
 
-  final String label;
-  final String value;
+  final List<double> values;
+  final Color color;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 * 0.85;
+    final n = values.length;
+
+    // Grid
+    final gridPaint = Paint()
+      ..color = color.withValues(alpha: isDark ? 0.15 : 0.12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    for (int ring = 1; ring <= 3; ring++) {
+      final path = Path();
+      for (int j = 0; j < n; j++) {
+        final angle = (j * 2 * pi / n) - pi / 2;
+        final r = radius * ring / 3;
+        final pt = Offset(
+            center.dx + r * cos(angle), center.dy + r * sin(angle));
+        if (j == 0) {
+          path.moveTo(pt.dx, pt.dy);
+        } else {
+          path.lineTo(pt.dx, pt.dy);
+        }
+      }
+      path.close();
+      canvas.drawPath(path, gridPaint);
+    }
+
+    // Data fill
+    final fillPaint = Paint()
+      ..color = color.withValues(alpha: 0.14)
+      ..style = PaintingStyle.fill;
+    final strokePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final dataPath = Path();
+    final dots = <Offset>[];
+    for (int i = 0; i < n; i++) {
+      final angle = (i * 2 * pi / n) - pi / 2;
+      final r = radius * values[i];
+      final pt =
+          Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+      dots.add(pt);
+      if (i == 0) {
+        dataPath.moveTo(pt.dx, pt.dy);
+      } else {
+        dataPath.lineTo(pt.dx, pt.dy);
+      }
+    }
+    dataPath.close();
+    canvas.drawPath(dataPath, fillPaint);
+    canvas.drawPath(dataPath, strokePaint);
+
+    // Dots
+    final dotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    for (final pt in dots) {
+      canvas.drawCircle(pt, 3, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RadarPainter old) =>
+      old.values != values || old.isDark != isDark;
+}
+
+// ─── Company pulse card ───────────────────────────────────────────────────────
+
+class _CompanyPulseCard extends StatelessWidget {
+  const _CompanyPulseCard({
+    required this.companyAvg,
+    required this.isDark,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+    required this.surface,
+    required this.border,
+  });
+
+  final double companyAvg;
+  final bool isDark;
   final Color ink;
+  final Color ink2;
   final Color ink3;
+  final Color surface;
+  final Color border;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(fontSize: 12, color: ink3)),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: ink,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'ŞİRKET NABZI',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: ink3,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              Icon(Icons.keyboard_arrow_up_rounded, size: 16, color: ink3),
+            ],
           ),
-        ),
-      ],
+          const SizedBox(height: 6),
+          Text(
+            companyAvg.toStringAsFixed(1),
+            style: GoogleFonts.bricolageGrotesque(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: ink,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Sektör ort. 3.6',
+            style: TextStyle(fontSize: 12, color: ink3),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ─── Quick Action Card ────────────────────────────────────────────────────────
+// ─── New survey card ──────────────────────────────────────────────────────────
 
-class _QuickActionCard extends StatelessWidget {
-  const _QuickActionCard({
-    required this.emoji,
-    required this.label,
-    required this.bg,
-    required this.labelColor,
+class _NewSurveyCard extends StatelessWidget {
+  const _NewSurveyCard({
+    required this.isDark,
+    required this.ink,
     required this.onTap,
   });
 
-  final String emoji;
-  final String label;
-  final Color bg;
-  final Color labelColor;
+  final bool isDark;
+  final Color ink;
   final VoidCallback onTap;
 
   @override
@@ -715,20 +914,50 @@ class _QuickActionCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: bg,
+          color: isDark ? AppColors.amberSoftDark : AppColors.amberWash,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 24)),
+            Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: AppColors.amber,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'YENİ ANKET',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.amber,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Text(
-              label,
+              'Hibrit Çalışma Modeli',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: labelColor,
+                color: ink,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'İK · 8 soru · 2 dk',
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.amberDeep,
               ),
             ),
           ],
@@ -738,7 +967,7 @@ class _QuickActionCard extends StatelessWidget {
   }
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
+// ─── Skeleton card ────────────────────────────────────────────────────────────
 
 class _SkeletonCard extends StatelessWidget {
   const _SkeletonCard({required this.height, required this.isDark});

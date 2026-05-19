@@ -24,10 +24,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 700),
     );
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _slide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
+    _slide = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero)
         .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
     _controller.forward();
   }
@@ -70,9 +70,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
     final ink = isDark ? AppColors.darkInk : AppColors.lightInk;
     final ink2 = isDark ? AppColors.darkInk2 : AppColors.lightInk2;
-    final ink3 = isDark ? AppColors.darkInk3 : AppColors.lightInk3;
-    final surface = isDark ? AppColors.darkSurface : AppColors.lightSurface;
     final border = isDark ? AppColors.borderDark : AppColors.borderLight;
+    final bool isWorking = _isLoading || authState.isLoading;
 
     return Scaffold(
       backgroundColor: bg,
@@ -84,95 +83,117 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 20),
 
-                  // Logo mark
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: AppColors.blue,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'PoM',
-                        style: GoogleFonts.bricolageGrotesque(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                  // PoM logo mark in header (left-aligned)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _PomLogoMark(isDark: isDark),
+                        const SizedBox(width: 8),
+                        Text(
+                          'PoM',
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: ink,
+                          ),
                         ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // Illustration card
+                  Container(
+                    width: double.infinity,
+                    height: 220,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF2A2010)
+                          : const Color(0xFFF8F0E0),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: CustomPaint(
+                        painter: _MeditationPainter(isDark: isDark),
+                        child: const SizedBox.expand(),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 32),
 
-                  // Headline
+                  const SizedBox(height: 28),
+
+                  // HOŞ GELDİN label
                   Text(
-                    'Çalışma hayatında\niç huzuru bul.',
-                    style: GoogleFonts.bricolageGrotesque(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w600,
-                      color: ink,
-                      letterSpacing: -1.0,
-                      height: 1.15,
+                    'HOŞ GELDİN',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.blue,
+                      letterSpacing: 1.0,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Haftada 5 soru · Tamamen anonim · KVKK uyumlu',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: ink3,
-                      height: 1.4,
+                  const SizedBox(height: 10),
+
+                  // "Tekrar görüşmek güzel." — "güzel." in italic blue
+                  RichText(
+                    textAlign: TextAlign.left,
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Tekrar görüşmek\n',
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w700,
+                            color: ink,
+                            letterSpacing: -0.5,
+                            height: 1.15,
+                          ),
+                        ),
+                        TextSpan(
+                          text: 'güzel.',
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w700,
+                            fontStyle: FontStyle.italic,
+                            color: AppColors.blue,
+                            letterSpacing: -0.5,
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Description
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'İş e-postanla ilişkili LinkedIn hesabınla giriş yap. Anonimliğin korunur.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: ink2,
+                        height: 1.5,
+                      ),
                     ),
                   ),
 
                   const Spacer(),
 
-                  // Feature cards
-                  _FeatureCard(
-                    emoji: '📊',
-                    title: 'Kişisel içgörüler',
-                    subtitle: 'Ruh halini takip et, trendleri keşfet',
-                    surface: surface,
-                    border: border,
-                    ink: ink,
-                    ink2: ink2,
-                  ),
-                  const SizedBox(height: 10),
-                  _FeatureCard(
-                    emoji: '🔒',
-                    title: 'Gizliliğin korunur',
-                    subtitle: 'Şirket sadece anonim toplamı görür',
-                    surface: surface,
-                    border: border,
-                    ink: ink,
-                    ink2: ink2,
-                  ),
-                  const SizedBox(height: 10),
-                  _FeatureCard(
-                    emoji: '🌿',
-                    title: 'Sektörel kıyaslama',
-                    subtitle: 'Kendini benzer şirketlerle karşılaştır',
-                    surface: surface,
-                    border: border,
-                    ink: ink,
-                    ink2: ink2,
-                  ),
-
-                  const Spacer(),
-
-                  // LinkedIn button
+                  // LinkedIn primary button
                   SizedBox(
                     width: double.infinity,
-                    height: 56,
+                    height: 54,
                     child: ElevatedButton(
-                      onPressed: (_isLoading || authState.isLoading)
-                          ? null
-                          : _startLinkedInOAuth,
+                      onPressed: isWorking ? null : _startLinkedInOAuth,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.linkedIn,
                         foregroundColor: Colors.white,
@@ -180,13 +201,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        shadowColor: AppColors.linkedIn.withValues(alpha: 0.4),
-                      ).copyWith(
-                        elevation: WidgetStateProperty.resolveWith(
-                          (s) => s.contains(WidgetState.pressed) ? 0 : 4,
-                        ),
                       ),
-                      child: (_isLoading || authState.isLoading)
+                      child: isWorking
                           ? const SizedBox(
                               width: 22,
                               height: 22,
@@ -198,12 +214,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const _LinkedInIcon(),
+                                _LinkedInIcon(),
                                 const SizedBox(width: 10),
                                 Text(
-                                  'LinkedIn ile Giriş Yap',
+                                  'LinkedIn ile giriş yap',
                                   style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 16,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w700,
                                     color: Colors.white,
                                   ),
@@ -212,12 +228,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Giriş yaparak KVKK aydınlatma metnini kabul etmiş olursunuz.',
-                    style: TextStyle(fontSize: 12, color: ink3, height: 1.4),
-                    textAlign: TextAlign.center,
+                  const SizedBox(height: 12),
+
+                  // Support button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton(
+                      onPressed: () {},
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: ink,
+                        side: BorderSide(color: border.withValues(alpha: 0.5)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Sorun mu yaşıyorsun? Destek',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: ink2,
+                        ),
+                      ),
+                    ),
                   ),
+
                   const SizedBox(height: 28),
                 ],
               ),
@@ -229,60 +265,110 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 }
 
-class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({
-    required this.emoji,
-    required this.title,
-    required this.subtitle,
-    required this.surface,
-    required this.border,
-    required this.ink,
-    required this.ink2,
-  });
+// ─── Meditation figure illustration ───────────────────────────────────────────
 
-  final String emoji;
-  final String title;
-  final String subtitle;
-  final Color surface;
-  final Color border;
-  final Color ink;
-  final Color ink2;
+class _MeditationPainter extends CustomPainter {
+  const _MeditationPainter({required this.isDark});
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    // Meditation cushion/shadow (brown ellipse)
+    paint.color = isDark ? const Color(0xFF8A5A30) : const Color(0xFFB87840);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.50, h * 0.82),
+        width: w * 0.35,
+        height: h * 0.10,
+      ),
+      paint,
+    );
+
+    // Body (blue rounded rect, slightly wider at bottom)
+    paint.color = isDark ? const Color(0xFF5570A0) : const Color(0xFF5B82C0);
+    final bodyPath = Path()
+      ..moveTo(w * 0.34, h * 0.78)
+      ..quadraticBezierTo(w * 0.30, h * 0.55, w * 0.36, h * 0.44)
+      ..quadraticBezierTo(w * 0.50, h * 0.40, w * 0.64, h * 0.44)
+      ..quadraticBezierTo(w * 0.70, h * 0.55, w * 0.66, h * 0.78)
+      ..close();
+    canvas.drawPath(bodyPath, paint);
+
+    // Head skin
+    paint.color = isDark ? const Color(0xFFB89060) : const Color(0xFFD4A870);
+    canvas.drawCircle(Offset(w * 0.50, h * 0.34), w * 0.105, paint);
+
+    // Eyes closed (two small arcs)
+    final eyePaint = Paint()
+      ..color = isDark ? const Color(0xFF6A4020) : const Color(0xFF4A2810)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCenter(
+          center: Offset(w * 0.455, h * 0.335), width: 10, height: 6),
+      pi,
+      pi,
+      false,
+      eyePaint,
+    );
+    canvas.drawArc(
+      Rect.fromCenter(
+          center: Offset(w * 0.545, h * 0.335), width: 10, height: 6),
+      pi,
+      pi,
+      false,
+      eyePaint,
+    );
+
+    // Decorative dots around figure
+    final dotPositions = [
+      (w * 0.22, h * 0.28, const Color(0xFFE8A53C)),
+      (w * 0.78, h * 0.24, const Color(0xFF72B8C8)),
+      (w * 0.18, h * 0.55, const Color(0xFF72C892)),
+      (w * 0.82, h * 0.50, const Color(0xFF72B8C8)),
+    ];
+    for (final (dx, dy, dotColor) in dotPositions) {
+      paint.color = dotColor.withValues(alpha: isDark ? 0.7 : 0.9);
+      canvas.drawCircle(Offset(dx, dy), 4, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MeditationPainter old) => old.isDark != isDark;
+}
+
+// ─── Shared logo mark ────────────────────────────────────────────────────────
+
+class _PomLogoMark extends StatelessWidget {
+  const _PomLogoMark({required this.isDark});
+  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: border),
+      width: 28,
+      height: 28,
+      decoration: const BoxDecoration(
+        color: AppColors.blue,
+        shape: BoxShape.circle,
       ),
-      child: Row(
+      child: Stack(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 22)),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: ink2,
-                    height: 1.3,
-                  ),
-                ),
-              ],
+          Positioned(
+            right: 4,
+            bottom: 4,
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                color: AppColors.sage,
+                shape: BoxShape.circle,
+              ),
             ),
           ),
         ],
@@ -291,9 +377,9 @@ class _FeatureCard extends StatelessWidget {
   }
 }
 
-class _LinkedInIcon extends StatelessWidget {
-  const _LinkedInIcon();
+// ─── LinkedIn icon ────────────────────────────────────────────────────────────
 
+class _LinkedInIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(

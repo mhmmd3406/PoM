@@ -1,6 +1,8 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../providers/checkin_provider.dart';
@@ -15,6 +17,8 @@ class CheckinFlowScreen extends ConsumerStatefulWidget {
 
 class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
   final PageController _pageController = PageController();
+  bool _showSuccess = false;
+  Map<String, double>? _resultScores;
 
   @override
   void initState() {
@@ -50,7 +54,11 @@ class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
     } else {
       final result = await notifier.submit();
       if (result != null && mounted) {
-        _showSuccessSheet();
+        setState(() {
+          _showSuccess = true;
+          _resultScores = result.personalScores
+              .map((k, v) => MapEntry(k, v));
+        });
       }
     }
   }
@@ -63,184 +71,20 @@ class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
     }
   }
 
-  void _showSuccessSheet() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
-    final surface = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final border = isDark ? AppColors.borderDark : AppColors.borderLight;
-    final ink = isDark ? AppColors.darkInk : AppColors.lightInk;
-    final ink2 = isDark ? AppColors.darkInk2 : AppColors.lightInk2;
-    final ink3 = isDark ? AppColors.darkInk3 : AppColors.lightInk3;
-    final sageDeep = isDark ? AppColors.sageDeepDark : AppColors.sageDeep;
-    final sageWash = isDark ? AppColors.sageWashDark : AppColors.sageWash;
-    final amberWash = isDark ? AppColors.amberSoftDark : AppColors.amberWash;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                color: border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Check circle
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.sage,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.sage.withValues(alpha: 0.35),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.check_rounded, color: Colors.white, size: 40),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Tebrikler!',
-              style: TextStyle(
-                fontFamily: 'BricolageGrotesque',
-                fontSize: 26,
-                fontWeight: FontWeight.w600,
-                color: ink,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Bu haftanın check-in\'i kaydedildi.\nBir sonraki soru 7 gün sonra.',
-              style: TextStyle(fontSize: 14, color: ink2, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            // Strength / attention cards
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: sageWash,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: border),
-              ),
-              child: Row(
-                children: [
-                  Text('🏆', style: const TextStyle(fontSize: 18)),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'EN GÜÇLÜ',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: sageDeep,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      Text(
-                        '🤝 Takım Uyumu',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: ink,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: amberWash,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: border),
-              ),
-              child: Row(
-                children: [
-                  Text('⚠️', style: const TextStyle(fontSize: 18)),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'DİKKAT EDİLECEK',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.amberDeep,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      Text(
-                        '😌 İş Stresi',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: ink,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  context.go('/insights');
-                },
-                child: const Text('İçgörüleri Gör'),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  context.go('/');
-                },
-                child: const Text('Ana Sayfa'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final cooldownAsync = ref.watch(checkinCooldownProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
+
+    if (_showSuccess) {
+      return _SuccessScreen(
+        scores: _resultScores ?? {},
+        isDark: isDark,
+        onInsights: () => context.go('/insights'),
+        onHome: () => context.go('/'),
+      );
+    }
 
     return Scaffold(
       backgroundColor: bg,
@@ -264,20 +108,449 @@ class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
   }
 }
 
+// ─── Success / Celebration screen ─────────────────────────────────────────────
+
+class _SuccessScreen extends StatefulWidget {
+  const _SuccessScreen({
+    required this.scores,
+    required this.isDark,
+    required this.onInsights,
+    required this.onHome,
+  });
+
+  final Map<String, double> scores;
+  final bool isDark;
+  final VoidCallback onInsights;
+  final VoidCallback onHome;
+
+  @override
+  State<_SuccessScreen> createState() => _SuccessScreenState();
+}
+
+class _SuccessScreenState extends State<_SuccessScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _confettiCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _confettiCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _confettiCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
+    final surface = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final border = isDark ? AppColors.borderDark : AppColors.borderLight;
+    final ink = isDark ? AppColors.darkInk : AppColors.lightInk;
+    final ink2 = isDark ? AppColors.darkInk2 : AppColors.lightInk2;
+    final ink3 = isDark ? AppColors.darkInk3 : AppColors.lightInk3;
+    final sageDeep = isDark ? AppColors.sageDeepDark : AppColors.sageDeep;
+    final sageWash = isDark ? AppColors.sageWashDark : AppColors.sageWash;
+    final amberWash = isDark ? AppColors.amberSoftDark : AppColors.amberWash;
+
+    // Compute avg from scores
+    final avg = widget.scores.isEmpty
+        ? 4.0
+        : widget.scores.values.reduce((a, b) => a + b) /
+            widget.scores.length;
+
+    // Normalized for radar
+    final _dimensionOrder = [
+      'overallMood',
+      'workStress',
+      'teamHarmony',
+      'personalGrowth',
+      'workLifeBalance',
+    ];
+    final normalized = _dimensionOrder
+        .map((k) => ((widget.scores[k] ?? 3.0) / 5.0).clamp(0.0, 1.0))
+        .toList();
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            children: [
+              const SizedBox(height: 32),
+
+              // Checkmark circle with confetti dots
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Confetti dots
+                  AnimatedBuilder(
+                    animation: _confettiCtrl,
+                    builder: (context, _) {
+                      return CustomPaint(
+                        painter: _ConfettiPainter(
+                          progress: _confettiCtrl.value,
+                          isDark: isDark,
+                        ),
+                        child: const SizedBox(width: 160, height: 160),
+                      );
+                    },
+                  ),
+                  // Green circle
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: AppColors.sage,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.sage.withValues(alpha: 0.30),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.check_rounded,
+                        color: Colors.white, size: 36),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              Text(
+                'Teşekkürler!',
+                style: GoogleFonts.bricolageGrotesque(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: ink,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Bu haftanın check-in\'i kaydedildi. Bir sonraki soru 7 gün sonra.',
+                style: TextStyle(fontSize: 14, color: ink2, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 24),
+
+              // Score card with radar
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: border),
+                ),
+                child: Row(
+                  children: [
+                    // Radar
+                    SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: CustomPaint(
+                        painter: _RadarPainter(
+                          values: normalized,
+                          color: AppColors.blue,
+                          isDark: isDark,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'BU HAFTAKİ DURUMUN',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: ink3,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                avg.toStringAsFixed(1),
+                                style: GoogleFonts.bricolageGrotesque(
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w700,
+                                  color: ink,
+                                  height: 1,
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 3),
+                                child: Text('/5',
+                                    style:
+                                        TextStyle(fontSize: 13, color: ink3)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '↑ Geçen haftaya göre +0.3',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.sageDeep,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // EN GÜÇLÜ
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: sageWash,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'EN GÜÇLÜ',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: sageDeep,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '🤝 Takım Uyumu · 4.5/5',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // DİKKAT EDİLECEK
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: amberWash,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'DİKKAT EDİLECEK',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.amberDeep,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '😌 İş Stresi · 3.5/5',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Spacer(),
+
+              // Primary CTA
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: widget.onInsights,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'İçgörüleri Gör',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.arrow_forward_rounded, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Secondary
+              GestureDetector(
+                onTap: widget.onHome,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    'Ana Sayfa',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: ink,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Confetti painter ─────────────────────────────────────────────────────────
+
+class _ConfettiPainter extends CustomPainter {
+  const _ConfettiPainter({required this.progress, required this.isDark});
+  final double progress;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final rng = Random(42);
+    final colors = [
+      AppColors.sage,
+      AppColors.blue,
+      AppColors.amber,
+      AppColors.rose,
+    ];
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    for (int i = 0; i < 12; i++) {
+      final angle = (i * 2 * pi / 12) + rng.nextDouble() * 0.4;
+      final dist = 55 + rng.nextDouble() * 20;
+      final r = dist * progress;
+      final x = center.dx + r * cos(angle);
+      final y = center.dy + r * sin(angle);
+      paint.color =
+          colors[i % colors.length].withValues(alpha: 1.0 - progress * 0.6);
+      canvas.drawCircle(Offset(x, y), 3.5, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ConfettiPainter old) => old.progress != progress;
+}
+
+// ─── Radar painter (shared) ───────────────────────────────────────────────────
+
+class _RadarPainter extends CustomPainter {
+  const _RadarPainter({
+    required this.values,
+    required this.color,
+    required this.isDark,
+  });
+
+  final List<double> values;
+  final Color color;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 * 0.85;
+    final n = values.length;
+
+    final gridPaint = Paint()
+      ..color = color.withValues(alpha: isDark ? 0.15 : 0.12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    for (int ring = 1; ring <= 3; ring++) {
+      final path = Path();
+      for (int j = 0; j < n; j++) {
+        final angle = (j * 2 * pi / n) - pi / 2;
+        final r = radius * ring / 3;
+        final pt =
+            Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+        if (j == 0) path.moveTo(pt.dx, pt.dy);
+        else path.lineTo(pt.dx, pt.dy);
+      }
+      path.close();
+      canvas.drawPath(path, gridPaint);
+    }
+
+    final fillPaint = Paint()
+      ..color = color.withValues(alpha: 0.14)
+      ..style = PaintingStyle.fill;
+    final strokePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final dataPath = Path();
+    final dots = <Offset>[];
+    for (int i = 0; i < n; i++) {
+      final angle = (i * 2 * pi / n) - pi / 2;
+      final r = radius * values[i];
+      final pt =
+          Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+      dots.add(pt);
+      if (i == 0) dataPath.moveTo(pt.dx, pt.dy);
+      else dataPath.lineTo(pt.dx, pt.dy);
+    }
+    dataPath.close();
+    canvas.drawPath(dataPath, fillPaint);
+    canvas.drawPath(dataPath, strokePaint);
+
+    final dotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    for (final pt in dots) {
+      canvas.drawCircle(pt, 3, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RadarPainter old) =>
+      old.values != values || old.isDark != isDark;
+}
+
 // ─── Cooldown state ───────────────────────────────────────────────────────────
 
 class _CooldownState extends StatelessWidget {
   const _CooldownState({required this.remaining});
   final Duration remaining;
-
-  String _formatDuration(Duration d) {
-    final days = d.inDays;
-    final hours = d.inHours % 24;
-    final minutes = d.inMinutes % 60;
-    if (days > 0) return '$days gün $hours saat';
-    if (hours > 0) return '$hours saat $minutes dakika';
-    return '$minutes dakika';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -289,20 +562,21 @@ class _CooldownState extends StatelessWidget {
     final border = isDark ? AppColors.borderDark : AppColors.borderLight;
 
     final parts = [
-      _CountdownPart(value: remaining.inDays, label: 'gün'),
-      _CountdownPart(value: remaining.inHours % 24, label: 'saat'),
-      _CountdownPart(value: remaining.inMinutes % 60, label: 'dk'),
+      (remaining.inDays, 'GÜN'),
+      (remaining.inHours % 24, 'SAAT'),
+      (remaining.inMinutes % 60, 'DK'),
     ];
 
     return Column(
       children: [
-        // Top bar
+        // Header
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => context.canPop() ? context.pop() : context.go('/'),
+                onTap: () =>
+                    context.canPop() ? context.pop() : context.go('/'),
                 child: Container(
                   width: 36,
                   height: 36,
@@ -317,13 +591,15 @@ class _CooldownState extends StatelessWidget {
               const Spacer(),
               Text(
                 'Haftalık Check-in',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ink),
+                style: TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w700, color: ink),
               ),
               const Spacer(),
               const SizedBox(width: 36),
             ],
           ),
         ),
+
         Expanded(
           child: Center(
             child: Padding(
@@ -347,23 +623,25 @@ class _CooldownState extends StatelessWidget {
                   const SizedBox(height: 24),
                   Text(
                     'Bu hafta tamamlandı',
-                    style: TextStyle(
-                      fontFamily: 'BricolageGrotesque',
+                    style: GoogleFonts.bricolageGrotesque(
                       fontSize: 24,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       color: ink,
                       letterSpacing: -0.4,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Bir sonraki check-in\'i şu kadar süre\nsonra yapabilirsin:',
+                    'Bir sonraki check-in\'i şu kadar süre sonra yapabilirsin:',
                     style: TextStyle(fontSize: 14, color: ink2, height: 1.5),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
+
+                  // Countdown cells
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 16),
                     decoration: BoxDecoration(
                       color: surface,
                       borderRadius: BorderRadius.circular(18),
@@ -373,14 +651,16 @@ class _CooldownState extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: parts
                           .expand((p) => [
-                                _CountdownCell(part: p, ink: ink, ink3: ink3),
+                                _CountdownCell(
+                                    value: p.$1, label: p.$2, ink: ink, ink3: ink3),
                                 if (p != parts.last)
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10),
                                     child: Text(
                                       ':',
                                       style: TextStyle(
-                                        fontSize: 24,
+                                        fontSize: 22,
                                         fontWeight: FontWeight.w300,
                                         color: ink3,
                                       ),
@@ -390,6 +670,7 @@ class _CooldownState extends StatelessWidget {
                           .toList(),
                     ),
                   ),
+
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
@@ -408,15 +689,16 @@ class _CooldownState extends StatelessWidget {
   }
 }
 
-class _CountdownPart {
-  const _CountdownPart({required this.value, required this.label});
+class _CountdownCell extends StatelessWidget {
+  const _CountdownCell({
+    required this.value,
+    required this.label,
+    required this.ink,
+    required this.ink3,
+  });
+
   final int value;
   final String label;
-}
-
-class _CountdownCell extends StatelessWidget {
-  const _CountdownCell({required this.part, required this.ink, required this.ink3});
-  final _CountdownPart part;
   final Color ink;
   final Color ink3;
 
@@ -426,9 +708,8 @@ class _CountdownCell extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          part.value.toString().padLeft(2, '0'),
-          style: TextStyle(
-            fontFamily: 'BricolageGrotesque',
+          value.toString().padLeft(2, '0'),
+          style: GoogleFonts.bricolageGrotesque(
             fontSize: 30,
             fontWeight: FontWeight.w600,
             color: ink,
@@ -437,7 +718,7 @@ class _CountdownCell extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          part.label.toUpperCase(),
+          label,
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
@@ -469,7 +750,6 @@ class _CheckinFlow extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? AppColors.darkSurface : AppColors.lightSurface;
     final border = isDark ? AppColors.borderDark : AppColors.borderLight;
-    final ink = isDark ? AppColors.darkInk : AppColors.lightInk;
     final ink2 = isDark ? AppColors.darkInk2 : AppColors.lightInk2;
     final ink3 = isDark ? AppColors.darkInk3 : AppColors.lightInk3;
     final bgAlt = isDark ? AppColors.darkBgAlt : AppColors.lightBgAlt;
@@ -484,7 +764,8 @@ class _CheckinFlow extends ConsumerWidget {
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => context.canPop() ? context.pop() : context.go('/'),
+                onTap: () =>
+                    context.canPop() ? context.pop() : context.go('/'),
                 child: Container(
                   width: 36,
                   height: 36,
@@ -567,7 +848,8 @@ class _CheckinFlow extends ConsumerWidget {
                     final currentStep = state.currentStep;
                     ref.read(checkinFlowProvider.notifier).selectAnswer(val);
                     if (currentStep < CheckinFlowState.totalSteps - 1) {
-                      Future.delayed(const Duration(milliseconds: 380), onNext);
+                      Future.delayed(
+                          const Duration(milliseconds: 380), onNext);
                     }
                   },
                 ),
@@ -576,7 +858,7 @@ class _CheckinFlow extends ConsumerWidget {
           ),
         ),
 
-        // Error message
+        // Error
         if (state.error != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -595,7 +877,9 @@ class _CheckinFlow extends ConsumerWidget {
                     child: Text(
                       state.error!,
                       style: TextStyle(
-                          color: Theme.of(context).colorScheme.onErrorContainer),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onErrorContainer),
                     ),
                   ),
                 ],
@@ -632,23 +916,20 @@ class _CheckinFlow extends ConsumerWidget {
                 ),
               if (isLastStep)
                 Expanded(
-                  child: SizedBox(
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: state.isCurrentStepAnswered && !state.isSubmitting
-                          ? onNext
-                          : null,
-                      child: state.isSubmitting
-                          ? const SizedBox(
-                              height: 22,
-                              width: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Tamamla'),
+                  child: Text(
+                    state.valueForStep(state.currentStep) == null
+                        ? 'Son soru!'
+                        : 'Kaydediliyor…',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: state.isCurrentStepAnswered
+                          ? AppColors.sage
+                          : ink3,
+                      fontWeight: FontWeight.w600,
                     ),
+                    textAlign: state.currentStep > 0
+                        ? TextAlign.right
+                        : TextAlign.center,
                   ),
                 ),
             ],
@@ -673,11 +954,8 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline_rounded,
-              size: 64,
-              color: Theme.of(context).colorScheme.error,
-            ),
+            Icon(Icons.error_outline_rounded,
+                size: 64, color: Theme.of(context).colorScheme.error),
             const SizedBox(height: 16),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 24),
