@@ -6,157 +6,262 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/providers/auth_provider.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  String _theme = 'system';
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
-    final ink = isDark ? AppColors.darkInk : AppColors.lightInk;
-    final ink2 = isDark ? AppColors.darkInk2 : AppColors.lightInk2;
-    final ink3 = isDark ? AppColors.darkInk3 : AppColors.lightInk3;
-    final surface = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final border = isDark ? AppColors.borderDark : AppColors.borderLight;
+
+    final bg      = isDark ? AppColors.darkBg      : AppColors.lightBg;
+    final surface = isDark ? AppColors.darkSurface  : AppColors.lightSurface;
+    final ink     = isDark ? AppColors.darkInk      : AppColors.lightInk;
+    final ink2    = isDark ? AppColors.darkInk2     : AppColors.lightInk2;
+    final ink3    = isDark ? AppColors.darkInk3     : AppColors.lightInk3;
+    final border  = isDark ? AppColors.borderDark   : AppColors.borderLight;
+    final divider = isDark ? AppColors.dividerDark  : AppColors.dividerLight;
+    final bgAlt   = isDark ? AppColors.darkBgAlt    : AppColors.lightBgAlt;
+
+    // Derive initials from display name
+    final name     = user?.displayName ?? 'Kullanıcı';
+    final initials = name
+        .trim()
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join();
+    final email = user?.email ?? '';
+    final dept  = user?.department ?? '';
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: bg,
-        title: Text(
-          'Profil',
-          style: TextStyle(color: ink, fontWeight: FontWeight.w700),
-        ),
-        automaticallyImplyLeading: false,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // Avatar + name
-          Center(
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 40,
-                  backgroundColor: isDark ? AppColors.sageSoftDark : AppColors.sageSoft,
-                  backgroundImage: user?.avatarUrl != null
-                      ? NetworkImage(user!.avatarUrl!)
-                      : null,
-                  child: user?.avatarUrl == null
-                      ? Text(
-                          (user?.displayName?.isNotEmpty == true)
-                              ? user!.displayName![0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.sageDark : AppColors.sageDeep,
-                          ),
-                        )
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  user?.displayName ?? 'İsimsiz Kullanıcı',
-                  style: GoogleFonts.bricolageGrotesque(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: ink,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                if (user?.email != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    user!.email!,
-                    style: TextStyle(fontSize: 14, color: ink3),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.blueSoftDark : AppColors.blueSoft,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _planLabel(user?.role ?? 'free').toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.blue,
-                      letterSpacing: 0.5,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // AppBar row
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Profil',
+                      style: GoogleFonts.bricolageGrotesque(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: ink,
+                        letterSpacing: -0.4,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  Icon(Icons.settings_outlined, size: 20, color: ink2),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 28),
 
-          // Settings section
-          _SectionHeader(label: 'HESAP', ink3: ink3),
-          const SizedBox(height: 8),
-          _ListCard(
-            surface: surface,
-            border: border,
-            children: [
-              _SettingRow(
-                icon: Icons.star_rounded,
-                label: 'Abonelik',
-                ink: ink,
-                ink2: ink2,
-                onTap: () => context.go('/subscription'),
-              ),
-              Divider(height: 1, color: border),
-              _SettingRow(
-                icon: Icons.account_balance_wallet_rounded,
-                label: 'Cüzdanım',
-                ink: ink,
-                ink2: ink2,
-                onTap: () => context.go('/wallet'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+            // Scrollable content
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+                children: [
+                  // ── User card ────────────────────────────────────────────────
+                  Container(
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: border),
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        // Avatar with initials
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.sageSoftDark : AppColors.sageSoft,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: user?.avatarUrl != null
+                              ? ClipOval(child: Image.network(user!.avatarUrl!, width: 64, height: 64, fit: BoxFit.cover))
+                              : Text(
+                                  initials,
+                                  style: GoogleFonts.bricolageGrotesque(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? AppColors.sageDark : AppColors.sageDeep,
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(width: 14),
+                        // Name + email + chips
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: GoogleFonts.bricolageGrotesque(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: ink,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                [email, if (dept.isNotEmpty) dept].join(' · '),
+                                style: TextStyle(fontSize: 12, color: ink3),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  _Chip(
+                                    label: _planLabel(user?.role ?? 'free'),
+                                    bgColor: isDark ? AppColors.blueSoftDark : AppColors.blueSoft,
+                                    fgColor: isDark ? AppColors.blueDark : AppColors.blueDeep,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  _Chip(
+                                    label: '12 hafta seri',
+                                    bgColor: isDark ? AppColors.amberSoftDark : AppColors.amberSoft,
+                                    fgColor: AppColors.amberDeep,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
-          _SectionHeader(label: 'GİZLİLİK', ink3: ink3),
-          const SizedBox(height: 8),
-          _ListCard(
-            surface: surface,
-            border: border,
-            children: [
-              _SettingRow(
-                icon: Icons.description_outlined,
-                label: 'KVKK Aydınlatma Metni',
-                ink: ink,
-                ink2: ink2,
-                onTap: () {},
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
-          _SectionHeader(label: 'OTURUM', ink3: ink3),
-          const SizedBox(height: 8),
-          _ListCard(
-            surface: surface,
-            border: border,
-            children: [
-              _SettingRow(
-                icon: Icons.logout_rounded,
-                label: 'Çıkış Yap',
-                ink: AppColors.rose,
-                ink2: AppColors.rose,
-                onTap: () async {
-                  await ref.read(authStateNotifierProvider.notifier).signOut();
-                },
+                  // ── Stats strip ──────────────────────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(child: _StatCell(label: 'Check-in', value: '12', ink: ink, ink3: ink3, surface: surface, border: border)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _StatCell(label: 'Anket', value: '8', ink: ink, ink3: ink3, surface: surface, border: border)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _StatCell(label: 'Refah', value: '4.2', ink: ink, ink3: ink3, surface: surface, border: border)),
+                    ],
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // ── Bildirimler ──────────────────────────────────────────────
+                  _SectionLabel(title: 'Bildirimler', ink3: ink3),
+                  _SettingsGroup(surface: surface, border: border, children: [
+                    _ToggleRow(label: 'Haftalık check-in hatırlatması', desc: 'Salı 09:00', initialOn: true, ink: ink, ink3: ink3, divider: divider),
+                    _ToggleRow(label: 'Yeni anket bildirimleri', desc: 'Push & e-posta', initialOn: true, ink: ink, ink3: ink3, divider: divider),
+                    _ToggleRow(label: 'Aylık özet raporu', desc: "Her ayın 1'i", initialOn: false, ink: ink, ink3: ink3, divider: divider),
+                    _ToggleRow(label: 'Ürün güncellemeleri', initialOn: false, ink: ink, ink3: ink3, divider: divider, last: true),
+                  ]),
+
+                  // ── Görünüm ──────────────────────────────────────────────────
+                  _SectionLabel(title: 'Görünüm', ink3: ink3),
+                  _SettingsGroup(surface: surface, border: border, children: [
+                    Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Tema',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ink),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(child: _ThemeOption(id: 'light', icon: '☀️', label: 'Aydınlık', selected: _theme, bgAlt: bgAlt, onTap: () => setState(() => _theme = 'light'), isDark: isDark)),
+                              const SizedBox(width: 6),
+                              Expanded(child: _ThemeOption(id: 'dark', icon: '🌙', label: 'Karanlık', selected: _theme, bgAlt: bgAlt, onTap: () => setState(() => _theme = 'dark'), isDark: isDark)),
+                              const SizedBox(width: 6),
+                              Expanded(child: _ThemeOption(id: 'system', icon: '⚙️', label: 'Sistem', selected: _theme, bgAlt: bgAlt, onTap: () => setState(() => _theme = 'system'), isDark: isDark)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]),
+
+                  // ── Hesap & Gizlilik ─────────────────────────────────────────
+                  _SectionLabel(title: 'Hesap & Gizlilik', ink3: ink3),
+                  _SettingsGroup(surface: surface, border: border, children: [
+                    _ChevronRow(label: 'KVKK Aydınlatma', desc: 'Versiyon 1.0 · Mart 2026', ink: ink, ink3: ink3, divider: divider, onTap: () {}),
+                    _ChevronRow(label: 'Gizlilik Politikası', ink: ink, ink3: ink3, divider: divider, onTap: () {}),
+                    _ChevronRow(label: 'Verilerimi dışa aktar', desc: 'JSON · son 12 hafta', ink: ink, ink3: ink3, divider: divider, onTap: () {}),
+                    _ChevronRow(label: 'Hesabımı sil', desc: 'Tüm verim kalıcı olarak silinir', ink: AppColors.rose, ink3: ink3, divider: divider, onTap: () {}, last: true),
+                  ]),
+
+                  // ── PoM Hakkında ─────────────────────────────────────────────
+                  _SectionLabel(title: 'PoM Hakkında', ink3: ink3),
+                  _SettingsGroup(surface: surface, border: border, children: [
+                    _ChevronRow(label: 'Sürüm', desc: '2.1.0 · Mayıs 2026', ink: ink, ink3: ink3, divider: divider),
+                    _ChevronRow(label: 'Destek', ink: ink, ink3: ink3, divider: divider, onTap: () {}),
+                    _ChevronRow(label: 'Hakkımızda', ink: ink, ink3: ink3, divider: divider, onTap: () {}, last: true),
+                  ]),
+
+                  const SizedBox(height: 16),
+
+                  // ── Logout button ────────────────────────────────────────────
+                  SizedBox(
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        await ref.read(authStateNotifierProvider.notifier).signOut();
+                      },
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: border),
+                        foregroundColor: AppColors.rose,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text(
+                        'Çıkış yap',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Footer ───────────────────────────────────────────────────
+                  Column(
+                    children: [
+                      Text(
+                        'PoM',
+                        style: GoogleFonts.bricolageGrotesque(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: ink3,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Made with care · 🇹🇷',
+                        style: TextStyle(fontSize: 10, color: ink3),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 32),
-        ],
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: 4,
@@ -195,45 +300,100 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  String _planLabel(String role) {
-    return switch (role) {
-      'pro' => 'Pro Üye',
-      'enterprise' => 'Kurumsal Üye',
-      'daas' => 'DaaS Üye',
-      _ => 'Ücretsiz Üye',
-    };
-  }
+  String _planLabel(String role) => switch (role) {
+    'pro'        => 'Pro üye',
+    'enterprise' => 'Kurumsal',
+    'daas'       => 'DaaS',
+    _            => 'Ücretsiz',
+  };
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label, required this.ink3});
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+class _Chip extends StatelessWidget {
+  const _Chip({required this.label, required this.bgColor, required this.fgColor});
+
   final String label;
-  final Color ink3;
+  final Color bgColor;
+  final Color fgColor;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: ink3,
-          letterSpacing: 0.5,
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(20)),
+      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fgColor)),
+    );
+  }
+}
+
+class _StatCell extends StatelessWidget {
+  const _StatCell({
+    required this.label,
+    required this.value,
+    required this.ink,
+    required this.ink3,
+    required this.surface,
+    required this.border,
+  });
+
+  final String label;
+  final String value;
+  final Color ink;
+  final Color ink3;
+  final Color surface;
+  final Color border;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: GoogleFonts.bricolageGrotesque(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: ink,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: ink3, letterSpacing: 0.4),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ListCard extends StatelessWidget {
-  const _ListCard({
-    required this.surface,
-    required this.border,
-    required this.children,
-  });
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title, required this.ink3});
+  final String title;
+  final Color ink3;
 
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 8, left: 2),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ink3, letterSpacing: 0.5),
+      ),
+    );
+  }
+}
+
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.surface, required this.border, required this.children});
   final Color surface;
   final Color border;
   final List<Widget> children;
@@ -246,48 +406,195 @@ class _ListCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: border),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(children: children),
     );
   }
 }
 
-class _SettingRow extends StatelessWidget {
-  const _SettingRow({
-    required this.icon,
+class _ToggleRow extends StatefulWidget {
+  const _ToggleRow({
     required this.label,
+    this.desc,
+    required this.initialOn,
     required this.ink,
-    required this.ink2,
-    required this.onTap,
+    required this.ink3,
+    required this.divider,
+    this.last = false,
   });
 
-  final IconData icon;
   final String label;
+  final String? desc;
+  final bool initialOn;
   final Color ink;
-  final Color ink2;
-  final VoidCallback onTap;
+  final Color ink3;
+  final Color divider;
+  final bool last;
+
+  @override
+  State<_ToggleRow> createState() => _ToggleRowState();
+}
+
+class _ToggleRowState extends State<_ToggleRow> {
+  late bool _on;
+
+  @override
+  void initState() {
+    super.initState();
+    _on = widget.initialOn;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: widget.last ? null : Border(bottom: BorderSide(color: widget.divider, width: 1)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: widget.ink)),
+                  if (widget.desc != null)
+                    Text(widget.desc!, style: TextStyle(fontSize: 11.5, color: widget.ink3)),
+                ],
+              ),
+            ),
+            GestureDetector(
+              onTap: () => setState(() => _on = !_on),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 40,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: _on ? AppColors.blue : widget.ink3.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: AnimatedAlign(
+                  duration: const Duration(milliseconds: 200),
+                  alignment: _on ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 3, offset: const Offset(0, 1))],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChevronRow extends StatelessWidget {
+  const _ChevronRow({
+    required this.label,
+    this.desc,
+    required this.ink,
+    required this.ink3,
+    required this.divider,
+    this.onTap,
+    this.last = false,
+  });
+
+  final String label;
+  final String? desc;
+  final Color ink;
+  final Color ink3;
+  final Color divider;
+  final VoidCallback? onTap;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Container(
+        decoration: BoxDecoration(
+          border: last ? null : Border(bottom: BorderSide(color: divider, width: 1)),
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: ink2),
-            const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: ink,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: ink)),
+                  if (desc != null)
+                    Text(desc!, style: TextStyle(fontSize: 11.5, color: ink3)),
+                ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, size: 18, color: ink2),
+            if (onTap != null)
+              Icon(Icons.chevron_right_rounded, size: 18, color: ink3),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeOption extends StatelessWidget {
+  const _ThemeOption({
+    required this.id,
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.bgAlt,
+    required this.onTap,
+    required this.isDark,
+  });
+
+  final String id;
+  final String icon;
+  final String label;
+  final String selected;
+  final Color bgAlt;
+  final VoidCallback onTap;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = selected == id;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: active ? (isDark ? AppColors.blueWashDark : AppColors.blueSoft) : bgAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: active ? AppColors.blue : Colors.transparent,
+            width: active ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(icon, style: const TextStyle(fontSize: 18)),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: active ? (isDark ? AppColors.blueDark : AppColors.blueDeep) : (isDark ? AppColors.darkInk2 : AppColors.lightInk2),
+              ),
+            ),
           ],
         ),
       ),
