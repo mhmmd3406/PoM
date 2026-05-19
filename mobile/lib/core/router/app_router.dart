@@ -16,6 +16,7 @@ import '../../features/subscription/presentation/subscription_screen.dart';
 import '../../features/surveys/presentation/survey_answer_screen.dart';
 import '../../features/surveys/presentation/surveys_screen.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
+import '../widgets/connection_error_widget.dart';
 
 class AppRoutes {
   static const home         = '/';
@@ -31,6 +32,7 @@ class AppRoutes {
   static const benchmarking  = '/benchmarking';
   static const reports       = '/reports';
   static const surveyAnswer  = '/survey/:id/answer';
+  static const surveyLock    = '/survey/:id/lock';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -128,28 +130,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           surveyId: state.pathParameters['id'] ?? '',
         ),
       ),
-    ],
-    errorBuilder: (context, state) => Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(
-              'Sayfa bulunamadı',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(state.error?.message ?? 'Bilinmeyen hata'),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => context.go(AppRoutes.home),
-              child: const Text('Ana Sayfaya Dön'),
-            ),
-          ],
-        ),
+      GoRoute(
+        path: AppRoutes.surveyLock,
+        builder: (context, state) => const SurveyMinNLockScreen(),
       ),
+    ],
+    errorBuilder: (context, state) => ConnectionErrorWidget(
+      title: 'Sayfa bulunamadı',
+      message: state.error?.message ?? 'Bilinmeyen hata',
+      onRetry: () => context.go(AppRoutes.home),
     ),
   );
 });

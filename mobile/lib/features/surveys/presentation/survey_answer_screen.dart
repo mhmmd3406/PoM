@@ -773,3 +773,199 @@ class _ThankYouScreen extends StatelessWidget {
     );
   }
 }
+
+// ─── Min-N lock screen ────────────────────────────────────────────────────────
+
+class SurveyMinNLockScreen extends StatelessWidget {
+  const SurveyMinNLockScreen({
+    super.key,
+    this.current = 8,
+    this.minRequired = 15,
+    this.surveyTitle = 'Hibrit Çalışma Modeli',
+  });
+
+  final int current;
+  final int minRequired;
+  final String surveyTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark   = Theme.of(context).brightness == Brightness.dark;
+    final bg       = isDark ? AppColors.darkBg      : AppColors.lightBg;
+    final surface  = isDark ? AppColors.darkSurface  : AppColors.lightSurface;
+    final ink      = isDark ? AppColors.darkInk      : AppColors.lightInk;
+    final ink2     = isDark ? AppColors.darkInk2     : AppColors.lightInk2;
+    final ink3     = isDark ? AppColors.darkInk3     : AppColors.lightInk3;
+    final bgAlt    = isDark ? AppColors.darkBgAlt    : AppColors.lightBgAlt;
+    final border   = isDark ? AppColors.borderDark   : AppColors.borderLight;
+    final amberCol = isDark ? AppColors.amberDark    : AppColors.amber;
+    final amberBg  = isDark ? AppColors.amberSoftDark: AppColors.amberWash;
+    final progress = (current / minRequired).clamp(0.0, 1.0);
+
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        title: Text(
+          surveyTitle,
+          style: GoogleFonts.bricolageGrotesque(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: ink,
+            letterSpacing: -0.3,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Lock card
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: border),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(color: amberBg, shape: BoxShape.circle),
+                      child: Icon(Icons.lock_rounded, size: 34, color: amberCol),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Sonuçlar Kilitli',
+                      style: GoogleFonts.bricolageGrotesque(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: ink,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Anonim sonuçları görüntülemek için en az $minRequired katılımcı gereklidir. Şu an $current kişi yanıtladı.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 14, color: ink2, height: 1.5),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '$current / $minRequired katılımcı',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: ink3,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        Text(
+                          '${(progress * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: amberCol,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 8,
+                        backgroundColor: bgAlt,
+                        valueColor: AlwaysStoppedAnimation<Color>(amberCol),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Privacy info
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: bgAlt,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.shield_outlined, size: 18, color: AppColors.blue),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Gizliliğinizi korumak için minimum $minRequired yanıt eşiği uygulanmaktadır. Eşik aşıldığında sonuçlar otomatik açılır.',
+                        style: TextStyle(fontSize: 12.5, color: ink2, height: 1.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Spacer(),
+
+              SizedBox(
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Hatırlatma gönderildi.'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: amberCol,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.notifications_outlined, size: 18),
+                  label: const Text(
+                    'Hatırlatma Gönder',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: border),
+                    foregroundColor: ink2,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text(
+                    'Geri Dön',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
