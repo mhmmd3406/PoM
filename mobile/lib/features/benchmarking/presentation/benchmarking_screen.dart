@@ -799,8 +799,7 @@ class _EmptyState extends StatelessWidget {
             const Text('📊', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
             Text(
-              'Karşılaştırmak için
-şirket ekleyin',
+              'Karşılaştırmak için şirket ekleyin',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
