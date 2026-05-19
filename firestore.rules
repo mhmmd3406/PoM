@@ -5,7 +5,10 @@ service cloud.firestore {
       return request.auth != null;
     }
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.is_admin == true;
+      return isAuthenticated() && (
+        request.auth.token.is_admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
     }
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
