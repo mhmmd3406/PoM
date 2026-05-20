@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -74,11 +76,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
                 children: [
                   // ── User card ────────────────────────────────────────────────
-                  Container(
+                  GestureDetector(
+                    onTap: kDebugMode
+                        ? () => _showDebugUserSwitcher(context)
+                        : null,
+                    child: Container(
                     decoration: BoxDecoration(
                       color: surface,
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: border),
+                      border: Border.all(
+                        color: kDebugMode ? AppColors.amber.withValues(alpha: 0.6) : border,
+                        width: kDebugMode ? 1.5 : 1,
+                      ),
                     ),
                     padding: const EdgeInsets.all(16),
                     child: Row(
@@ -138,6 +147,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     bgColor: isDark ? AppColors.amberSoftDark : AppColors.amberSoft,
                                     fgColor: AppColors.amberDeep,
                                   ),
+                                  if (kDebugMode) ...[
+                                    const SizedBox(width: 6),
+                                    _Chip(
+                                      label: '⚙ DEV',
+                                      bgColor: AppColors.amber.withValues(alpha: 0.15),
+                                      fgColor: AppColors.amber,
+                                    ),
+                                  ],
                                 ],
                               ),
                             ],
@@ -145,6 +162,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ],
                     ),
+                  ),
                   ),
 
                   const SizedBox(height: 12),
@@ -306,6 +324,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     'daas'       => 'DaaS',
     _            => 'Ücretsiz',
   };
+
+  void _showDebugUserSwitcher(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _DebugUserSwitcherSheet(
+        currentUid: ref.read(currentUserProvider)?.uid ?? '',
+        onSelect: (user) {
+          ref.read(authStateNotifierProvider.notifier).switchDebugUser(user);
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -603,6 +636,187 @@ class _ThemeOption extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Debug user switcher bottom sheet ─────────────────────────────────────────
+
+class _DebugUserSwitcherSheet extends StatelessWidget {
+  const _DebugUserSwitcherSheet({
+    required this.currentUid,
+    required this.onSelect,
+  });
+
+  final String currentUid;
+  final void Function(UserModel) onSelect;
+
+  static const _roleColors = {
+    'free':       (bg: Color(0xFFE5E7EB), fg: Color(0xFF374151)),
+    'pro':        (bg: Color(0xFFDCFCE7), fg: Color(0xFF166534)),
+    'enterprise': (bg: Color(0xFFDBEAFE), fg: Color(0xFF1E40AF)),
+    'daas':       (bg: Color(0xFFF3E8FF), fg: Color(0xFF6B21A8)),
+  };
+
+  static const _roleLabels = {
+    'free': 'Ücretsiz',
+    'pro': 'Pro',
+    'enterprise': 'Kurumsal',
+    'daas': 'DaaS',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.amber.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  '⚙ DEV',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.amber),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Kullanıcı Değiştir',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Seçilen kullanıcının bakış açısıyla uygulamayı keşfet',
+            style: TextStyle(fontSize: 12, color: Colors.white54),
+          ),
+          const SizedBox(height: 16),
+
+          // User list
+          ...kDebugUsers.map((u) {
+            final isActive = u.uid == currentUid;
+            final colors = _roleColors[u.role] ?? (bg: const Color(0xFFE5E7EB), fg: const Color(0xFF374151));
+            final initials = (u.displayName ?? '?')
+                .trim()
+                .split(' ')
+                .where((w) => w.isNotEmpty)
+                .take(2)
+                .map((w) => w[0].toUpperCase())
+                .join();
+
+            return GestureDetector(
+              onTap: isActive ? null : () => onSelect(u),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? AppColors.blue.withValues(alpha: 0.15)
+                      : Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isActive ? AppColors.blue : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Avatar circle
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.blue.withValues(alpha: isActive ? 0.3 : 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        initials,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: isActive ? AppColors.blueDark : Colors.white70,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Name + meta
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            u.displayName ?? '',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${u.email ?? ''}  ·  ${u.department ?? ''}',
+                            style: const TextStyle(fontSize: 11, color: Colors.white54),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Role badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: colors.bg,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _roleLabels[u.role] ?? u.role,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: colors.fg,
+                        ),
+                      ),
+                    ),
+                    if (isActive) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.blue),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
