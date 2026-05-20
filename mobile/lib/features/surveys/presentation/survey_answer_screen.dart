@@ -151,60 +151,105 @@ class _SurveyAnswerScreenState extends State<SurveyAnswerScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Header ─────────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: _back,
-                    child: Icon(Icons.arrow_back_rounded, size: 22, color: ink2),
+      // ── App bar carries progress + close ─────────────────────────────────────
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(64),
+        child: AppBar(
+          backgroundColor: bg,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: _back,
+                  child: Icon(Icons.arrow_back_rounded, size: 22, color: ink2),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SORU ${_step + 1} / $_totalSteps  •  ${(progress * 100).round()}%',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: ink3,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          minHeight: 4,
+                          backgroundColor: isDark ? AppColors.darkBgAlt : AppColors.lightBgAlt,
+                          valueColor: const AlwaysStoppedAnimation<Color>(AppColors.blue),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'SORU ${_step + 1} / $_totalSteps  ${(progress * 100).round()}%',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: ink3,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 4,
-                            backgroundColor: isDark ? AppColors.darkBgAlt : AppColors.lightBgAlt,
-                            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.blue),
-                          ),
-                        ),
-                      ],
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () => context.pop(),
+                  child: Icon(Icons.close_rounded, size: 20, color: ink3),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+
+      // ── Footer nav ────────────────────────────────────────────────────────────
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton.icon(
+                onPressed: _step > 0 ? _back : null,
+                icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                label: const Text('Geri'),
+                style: TextButton.styleFrom(foregroundColor: ink2),
+              ),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: answered != null ? _next : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: Icon(Icons.close_rounded, size: 20, color: ink3),
+                  child: Text(
+                    isLast ? 'Gönder' : 'İleri →',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
 
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
+      // ── Scrollable question body ──────────────────────────────────────────────
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Survey label + anon note
+            Row(
+              children: [
+                Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: isDark ? AppColors.darkBgAlt : AppColors.lightBgAlt,
@@ -215,130 +260,83 @@ class _SurveyAnswerScreenState extends State<SurveyAnswerScreen> {
                     style: TextStyle(fontSize: 11.5, color: ink3, fontWeight: FontWeight.w500),
                   ),
                 ),
-              ),
-            ),
-
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              child: Row(
-                children: [
-                  Container(
-                    width: 4,
-                    height: 4,
-                    decoration: const BoxDecoration(
-                      color: AppColors.sage,
-                      shape: BoxShape.circle,
-                    ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.sage,
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Yanıtların anonim olarak kaydedilir',
-                    style: TextStyle(fontSize: 11.5, color: ink3),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Question ────────────────────────────────────────────────────────
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      q.text,
-                      style: GoogleFonts.bricolageGrotesque(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: ink,
-                        height: 1.25,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    if (q.hint.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(q.hint, style: TextStyle(fontSize: 14, color: ink2, height: 1.4)),
-                    ],
-                    const SizedBox(height: 28),
-
-                    // ── Answer input based on type ────────────────────────────
-                    switch (q.type) {
-                      _QuestionType.emoji5 => _Emoji5Input(
-                          selected: answered as int?,
-                          onSelect: (v) { _answer(v); _next(); },
-                          isDark: isDark,
-                          border: border,
-                        ),
-                      _QuestionType.yesNo => _YesNoInput(
-                          selected: answered as bool?,
-                          onSelect: (v) { _answer(v); _next(); },
-                          isDark: isDark,
-                          border: border,
-                        ),
-                      _QuestionType.trueFalse => _TrueFalseInput(
-                          selected: answered as bool?,
-                          onSelect: (v) { _answer(v); _next(); },
-                          isDark: isDark,
-                          border: border,
-                        ),
-                      _QuestionType.scale5 => _Scale5Input(
-                          selected: answered as int?,
-                          onSelect: (v) { _answer(v); _next(); },
-                          isDark: isDark,
-                          border: border,
-                          ink: ink,
-                          ink2: ink2,
-                        ),
-                      _QuestionType.scale10 => _Scale10Input(
-                          selected: answered as int?,
-                          onSelect: (v) { _answer(v); _next(); },
-                          isDark: isDark,
-                          border: border,
-                          ink: ink,
-                          ink2: ink2,
-                          ink3: ink3,
-                        ),
-                    },
-                  ],
                 ),
-              ),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    'Anonim kaydedilir',
+                    style: TextStyle(fontSize: 11, color: ink3),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
 
-            // ── Footer nav ──────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton.icon(
-                    onPressed: _step > 0 ? _back : null,
-                    icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                    label: const Text('Geri'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: ink2,
-                    ),
-                  ),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: answered != null ? _next : null,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        isLast ? 'Gönder' : 'İleri →',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 20),
+
+            // Question text
+            Text(
+              q.text,
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: ink,
+                height: 1.25,
+                letterSpacing: -0.5,
               ),
             ),
+            if (q.hint.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(q.hint, style: TextStyle(fontSize: 14, color: ink2, height: 1.4)),
+            ],
+            const SizedBox(height: 28),
+
+            // ── Answer input based on type ──────────────────────────────────────
+            switch (q.type) {
+              _QuestionType.emoji5 => _Emoji5Input(
+                  selected: answered as int?,
+                  onSelect: (v) { _answer(v); _next(); },
+                  isDark: isDark,
+                  border: border,
+                ),
+              _QuestionType.yesNo => _YesNoInput(
+                  selected: answered as bool?,
+                  onSelect: (v) { _answer(v); _next(); },
+                  isDark: isDark,
+                  border: border,
+                ),
+              _QuestionType.trueFalse => _TrueFalseInput(
+                  selected: answered as bool?,
+                  onSelect: (v) { _answer(v); _next(); },
+                  isDark: isDark,
+                  border: border,
+                ),
+              _QuestionType.scale5 => _Scale5Input(
+                  selected: answered as int?,
+                  onSelect: (v) { _answer(v); _next(); },
+                  isDark: isDark,
+                  border: border,
+                  ink: ink,
+                  ink2: ink2,
+                ),
+              _QuestionType.scale10 => _Scale10Input(
+                  selected: answered as int?,
+                  onSelect: (v) { _answer(v); _next(); },
+                  isDark: isDark,
+                  border: border,
+                  ink: ink,
+                  ink2: ink2,
+                  ink3: ink3,
+                ),
+            },
           ],
         ),
       ),
