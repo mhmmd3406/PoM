@@ -86,7 +86,8 @@ const _kDebugUsers = [
   ),
 ];
 
-const _testUser = _kDebugUsers[1]; // pro kullanıcı varsayılan
+// ignore: prefer_const_declarations
+final _testUser = _kDebugUsers[1]; // pro kullanıcı varsayılan
 
 /// Tüm debug kullanıcılarına dışarıdan erişim (ProfileScreen için).
 const kDebugUsers = _kDebugUsers;
@@ -100,7 +101,7 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
   AuthState build() {
     // In debug builds, bypass LinkedIn login with a test user.
     if (kDebugMode && AppConstants.debugBypassAuth) {
-      return const AuthState(user: _testUser);
+      return AuthState(user: _testUser);
     }
 
     ref.listen(authStateProvider, (previous, next) {
