@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -14,11 +15,10 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  String _theme = 'system';
-
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(currentUserProvider);
+    final user      = ref.watch(currentUserProvider);
+    final themeMode = ref.watch(themeModeProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg      = isDark ? AppColors.darkBg      : AppColors.lightBg;
@@ -186,11 +186,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           const SizedBox(height: 10),
                           Row(
                             children: [
-                              Expanded(child: _ThemeOption(id: 'light', icon: '☀️', label: 'Aydınlık', selected: _theme, bgAlt: bgAlt, onTap: () => setState(() => _theme = 'light'), isDark: isDark)),
+                              Expanded(child: _ThemeOption(id: 'light',  icon: '☀️', label: 'Aydınlık', selected: themeMode, bgAlt: bgAlt, onTap: () => ref.read(themeModeProvider.notifier).state = ThemeMode.light,  isDark: isDark)),
                               const SizedBox(width: 6),
-                              Expanded(child: _ThemeOption(id: 'dark', icon: '🌙', label: 'Karanlık', selected: _theme, bgAlt: bgAlt, onTap: () => setState(() => _theme = 'dark'), isDark: isDark)),
+                              Expanded(child: _ThemeOption(id: 'dark',   icon: '🌙', label: 'Karanlık', selected: themeMode, bgAlt: bgAlt, onTap: () => ref.read(themeModeProvider.notifier).state = ThemeMode.dark,   isDark: isDark)),
                               const SizedBox(width: 6),
-                              Expanded(child: _ThemeOption(id: 'system', icon: '⚙️', label: 'Sistem', selected: _theme, bgAlt: bgAlt, onTap: () => setState(() => _theme = 'system'), isDark: isDark)),
+                              Expanded(child: _ThemeOption(id: 'system', icon: '⚙️', label: 'Sistem',   selected: themeMode, bgAlt: bgAlt, onTap: () => ref.read(themeModeProvider.notifier).state = ThemeMode.system, isDark: isDark)),
                             ],
                           ),
                         ],
@@ -562,14 +562,20 @@ class _ThemeOption extends StatelessWidget {
   final String id;
   final String icon;
   final String label;
-  final String selected;
+  final ThemeMode selected;
   final Color bgAlt;
   final VoidCallback onTap;
   final bool isDark;
 
+  static ThemeMode _idToMode(String id) => switch (id) {
+    'light'  => ThemeMode.light,
+    'dark'   => ThemeMode.dark,
+    _        => ThemeMode.system,
+  };
+
   @override
   Widget build(BuildContext context) {
-    final active = selected == id;
+    final active = selected == _idToMode(id);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
