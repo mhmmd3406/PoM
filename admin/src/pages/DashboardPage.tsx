@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { useCollection, where, orderBy, limit, Timestamp } from '../hooks/useFirestore'
 import { MetricCard } from '../components/MetricCard'
+import { Pagination } from '../components/Pagination'
+import { exportToXlsx } from '../utils/exportXlsx'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +63,9 @@ function subtractDays(n: number): Date {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const [activityPage, setActivityPage] = useState(0)
+  const [activityPageSize, setActivityPageSize] = useState(10)
+
   // Data fetching
   const thirtyDaysAgo = useMemo(() => Timestamp.fromDate(subtractDays(30)), [])
   const sevenDaysAgo = useMemo(() => Timestamp.fromDate(subtractDays(7)), [])
@@ -158,10 +163,10 @@ export default function DashboardPage() {
       .map(([id, value]) => ({ name: companyMap[id] ?? id, value }))
   }, [allUsers, companies])
 
-  // Recent activity (last 10 check-ins)
+  const allActivity = useMemo(() => recentCheckins ?? [], [recentCheckins])
   const recentActivity = useMemo(
-    () => (recentCheckins ?? []).slice(0, 10),
-    [recentCheckins],
+    () => allActivity.slice(activityPage * activityPageSize, (activityPage + 1) * activityPageSize),
+    [allActivity, activityPage, activityPageSize],
   )
 
   const loading = usersLoading || checkinsLoading
@@ -299,10 +304,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent activity feed */}
-        <div className="xl:col-span-2 card p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Son Aktiviteler</h2>
+        <div className="xl:col-span-2 card overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="text-sm font-semibold text-gray-700">Son Aktiviteler</h2>
+          </div>
           {checkinsLoading ? (
-            <div className="space-y-3">
+            <div className="p-5 space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-gray-100 animate-pulse flex-shrink-0" />
@@ -316,14 +323,14 @@ export default function DashboardPage() {
           ) : recentActivity.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">Henüz aktivite yok.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y divide-gray-50 px-5">
               {recentActivity.map((c) => {
                 const date = tsToDate(c.created_at)
                 const scoreAvg = c.scores
                   ? Object.values(c.scores).reduce((s, v) => s + v, 0) / Object.values(c.scores).length
                   : null
                 return (
-                  <div key={c.id} className="flex items-center gap-3 py-1.5 border-b border-gray-50 last:border-0">
+                  <div key={c.id} className="flex items-center gap-3 py-2.5">
                     <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
                       <CheckInIcon className="w-4 h-4 text-brand-600" />
                     </div>
@@ -350,6 +357,26 @@ export default function DashboardPage() {
                 )
               })}
             </div>
+          )}
+          {!checkinsLoading && (
+            <Pagination
+              page={activityPage}
+              pageSize={activityPageSize}
+              total={allActivity.length}
+              onPageChange={setActivityPage}
+              onPageSizeChange={(s) => { setActivityPageSize(s); setActivityPage(0) }}
+              onExport={() => exportToXlsx(
+                allActivity.map((c) => ({
+                  'Kullanıcı ID': c.userId ?? '',
+                  'Şirket ID': c.companyId ?? '',
+                  'Skor Ort.': c.scores
+                    ? (Object.values(c.scores).reduce((a, b) => a + b, 0) / Object.values(c.scores).length).toFixed(2)
+                    : '',
+                  'Tarih': tsToDate(c.created_at)?.toLocaleString('tr-TR') ?? '',
+                })),
+                'pom-aktiviteler',
+              )}
+            />
           )}
         </div>
       </div>

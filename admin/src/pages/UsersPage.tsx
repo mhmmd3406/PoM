@@ -188,34 +188,11 @@ export default function UsersPage() {
     return list
   }, [users, roleFilter, search])
 
-  // CSV export
-  const handleExport = () => {
-    const rows = [
-      ['UID', 'Ad Soyad', 'Rol', 'Şirket ID', 'Departman', 'Oluşturulma', 'KVKK'],
-      ...filtered.map((u) => [
-        u.id,
-        u.displayName ?? '',
-        u.role ?? 'free',
-        u.companyId ?? '',
-        u.department ?? '',
-        tsToString(u.created_at),
-        u.kvkk_accepted ? 'Evet' : 'Hayır',
-      ]),
-    ]
-    const csv = rows.map((r) => r.map((v) => `"${v}"`).join(',')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `pom-users-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
   const columns: Column<UserDoc>[] = [
     {
       key: 'id',
       header: 'UID',
+      exportValue: (u) => u.id,
       render: (u) => (
         <span
           className="font-mono text-xs text-gray-500 cursor-pointer hover:text-gray-800"
@@ -230,6 +207,7 @@ export default function UsersPage() {
       key: 'displayName',
       header: 'Ad Soyad',
       sortable: true,
+      exportValue: (u) => u.displayName ?? '',
       render: (u) => (
         <span className="text-sm font-medium text-gray-800">{u.displayName ?? '—'}</span>
       ),
@@ -238,11 +216,13 @@ export default function UsersPage() {
       key: 'role',
       header: 'Rol',
       sortable: true,
+      exportValue: (u) => u.role ?? 'free',
       render: (u) => <RoleBadge role={u.role} />,
     },
     {
       key: 'companyId',
       header: 'Şirket ID',
+      exportValue: (u) => u.companyId ?? '',
       render: (u) =>
         u.companyId ? (
           <span className="font-mono text-xs text-gray-500" title={u.companyId}>
@@ -256,11 +236,13 @@ export default function UsersPage() {
       key: 'created_at',
       header: 'Oluşturulma',
       sortable: true,
+      exportValue: (u) => tsToString(u.created_at),
       render: (u) => <span className="text-xs text-gray-500">{tsToString(u.created_at)}</span>,
     },
     {
       key: 'kvkk_accepted',
       header: 'KVKK',
+      exportValue: (u) => u.kvkk_accepted ? 'Evet' : 'Hayır',
       render: (u) => (
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -332,12 +314,7 @@ export default function UsersPage() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="UID, ad, şirket ara…"
-        actions={
-          <button onClick={handleExport} className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5">
-            <DownloadIcon className="w-3.5 h-3.5" />
-            CSV İndir
-          </button>
-        }
+        exportFilename="pom-kullanicilar"
       />
 
       {/* Modals */}
@@ -359,10 +336,3 @@ export default function UsersPage() {
   )
 }
 
-function DownloadIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-    </svg>
-  )
-}

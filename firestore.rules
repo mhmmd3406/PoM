@@ -10,6 +10,12 @@ service cloud.firestore {
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
+    function isCompanyAdmin() {
+      return isAuthenticated() && request.auth.token.company_admin == true;
+    }
+    function isCompanyMember(companyId) {
+      return isAuthenticated() && request.auth.token.company_id == companyId;
+    }
 
     // Users
     match /users/{userId} {
@@ -60,6 +66,32 @@ service cloud.firestore {
     match /daas_api_keys/{keyId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow write: if false; // Cloud Functions only
+    }
+
+    // Surveys — admins manage all; company admins manage their company's;
+    // all authenticated users read surveys for their company OR platform-wide ('__admin__') ones.
+    match /surveys/{surveyId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && (
+               resource.data.companyId == '__admin__'
+            || isCompanyMember(resource.data.companyId)
+           ));
+      allow create: if isAdmin()
+        || (isCompanyAdmin() && isCompanyMember(request.resource.data.companyId));
+      allow update, delete: if isAdmin()
+        || (isCompanyAdmin() && isCompanyMember(resource.data.companyId));
+    }
+
+    // Survey responses — admins and company admins read all for their company;
+    // any authenticated user can submit and read their company's responses.
+    match /survey_responses/{responseId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && (
+               resource.data.companyId == '__admin__'
+            || isCompanyMember(resource.data.companyId)
+           ));
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
 
     // Admin catch-all: full access to any unmatched document

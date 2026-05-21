@@ -2,13 +2,20 @@ import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
-const NAV_ITEMS = [
-  { to: '/',             label: 'Dashboard',       icon: HomeIcon },
-  { to: '/users',        label: 'Kullanıcılar',    icon: UsersIcon },
-  { to: '/companies',    label: 'Şirketler',       icon: BuildingIcon },
-  { to: '/subscriptions',label: 'Abonelikler',     icon: CreditCardIcon },
-  { to: '/thresholds',   label: 'Eşikler',         icon: ShieldIcon },
-  { to: '/admins',       label: 'Admin Yönetimi',  icon: KeyIcon },
+const ADMIN_NAV = [
+  { to: '/',              label: 'Dashboard',       icon: HomeIcon },
+  { to: '/users',         label: 'Kullanıcılar',    icon: UsersIcon },
+  { to: '/companies',     label: 'Şirketler',       icon: BuildingIcon },
+  { to: '/subscriptions', label: 'Abonelikler',     icon: CreditCardIcon },
+  { to: '/departments',   label: 'Departmanlar',    icon: ChartBarIcon },
+  { to: '/benchmark',     label: 'Benchmark',       icon: TrendingIcon },
+  { to: '/thresholds',    label: 'Eşikler',         icon: ShieldIcon },
+  { to: '/admins',        label: 'Admin Yönetimi',  icon: KeyIcon },
+]
+
+const PORTAL_NAV = [
+  { to: '/portal',         label: 'Dashboard', icon: HomeIcon },
+  { to: '/portal/surveys', label: 'Anketler',  icon: ClipboardIcon },
 ]
 
 export function Layout() {
@@ -21,8 +28,13 @@ export function Layout() {
     navigate('/login')
   }
 
-  const userEmail =
-    authState.status === 'authenticated' ? authState.user.email : ''
+  const isCompanyAdmin =
+    authState.status === 'authenticated' && authState.role === 'company_admin'
+
+  const navItems    = isCompanyAdmin ? PORTAL_NAV : ADMIN_NAV
+  const panelTitle  = isCompanyAdmin ? 'PoM Portal' : 'PoM Admin'
+  const panelSub    = isCompanyAdmin ? 'Şirket Paneli' : 'Peace of Mind'
+  const userEmail   = authState.status === 'authenticated' ? authState.user.email : ''
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -49,18 +61,18 @@ export function Layout() {
             <span className="text-white font-bold text-sm">P</span>
           </div>
           <div>
-            <p className="font-semibold text-gray-900 leading-none">PoM Admin</p>
-            <p className="text-xs text-gray-400 mt-0.5">Peace of Mind</p>
+            <p className="font-semibold text-gray-900 leading-none">{panelTitle}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{panelSub}</p>
           </div>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
-              end={to === '/'}
+              end={to === '/' || to === '/portal'}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -80,6 +92,9 @@ export function Layout() {
         <div className="px-3 py-4 border-t border-gray-100">
           <div className="px-3 py-2 mb-1">
             <p className="text-xs text-gray-400 truncate">{userEmail}</p>
+            {isCompanyAdmin && (
+              <p className="text-xs text-brand-600 font-medium mt-0.5">Şirket Yöneticisi</p>
+            )}
           </div>
           <button
             onClick={handleLogout}
@@ -101,7 +116,7 @@ export function Layout() {
           >
             <MenuIcon className="w-5 h-5" />
           </button>
-          <span className="font-semibold text-gray-900">PoM Admin</span>
+          <span className="font-semibold text-gray-900">{panelTitle}</span>
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">
@@ -118,6 +133,14 @@ function HomeIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="m3 12 2-2m0 0 7-7 7 7M5 10v10a1 1 0 0 0 1 1h3m10-11 2 2m-2-2v10a1 1 0 0 1-1 1h-3m-6 0a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1m-6 0h6" />
+    </svg>
+  )
+}
+
+function ClipboardIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4" />
     </svg>
   )
 }
@@ -174,6 +197,22 @@ function MenuIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+  )
+}
+
+function ChartBarIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+    </svg>
+  )
+}
+
+function TrendingIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
     </svg>
   )
 }

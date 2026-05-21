@@ -132,6 +132,7 @@ export default function SubscriptionsPage() {
     {
       key: 'userId',
       header: 'Kullanıcı ID',
+      exportValue: (s) => s.userId ?? '',
       render: (s) => (
         <span
           className="font-mono text-xs text-gray-500 cursor-pointer hover:text-gray-800"
@@ -146,17 +147,20 @@ export default function SubscriptionsPage() {
       key: 'plan',
       header: 'Plan',
       sortable: true,
+      exportValue: (s) => s.plan ?? 'free',
       render: (s) => <PlanBadge plan={s.plan} />,
     },
     {
       key: 'status',
       header: 'Durum',
       sortable: true,
+      exportValue: (s) => s.status ?? 'inactive',
       render: (s) => <StatusBadge status={s.status} />,
     },
     {
       key: 'stripe_subscription_id',
       header: 'Stripe Sub ID',
+      exportValue: (s) => s.stripe_subscription_id ?? '',
       render: (s) =>
         s.stripe_subscription_id ? (
           <span
@@ -174,6 +178,7 @@ export default function SubscriptionsPage() {
       key: 'current_period_end',
       header: 'Dönem Sonu',
       sortable: true,
+      exportValue: (s) => tsToString(s.current_period_end),
       render: (s) => {
         if (!s.current_period_end) return <span className="text-gray-300 text-xs">—</span>
         const d = s.current_period_end.toDate
@@ -191,6 +196,7 @@ export default function SubscriptionsPage() {
       key: 'created_at',
       header: 'Oluşturulma',
       sortable: true,
+      exportValue: (s) => tsToString(s.created_at),
       render: (s) => <span className="text-xs text-gray-500">{tsToString(s.created_at)}</span>,
     },
   ]
@@ -305,6 +311,7 @@ export default function SubscriptionsPage() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Kullanıcı ID, Stripe ID ara…"
+        exportFilename="pom-abonelikler"
       />
     </div>
   )
