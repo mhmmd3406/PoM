@@ -10,7 +10,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   'auth/user-disabled': 'Bu hesap devre dışı bırakılmış.',
   'auth/network-request-failed': 'Ağ bağlantısı hatası. İnternet bağlantınızı kontrol edin.',
   'auth/invalid-credential': 'E-posta veya şifre hatalı.',
-  NOT_ADMIN: 'Bu hesabın yönetici yetkisi bulunmuyor.',
+  NOT_ADMIN: 'Bu hesabın yönetici veya şirket yöneticisi yetkisi bulunmuyor.',
 }
 
 function getErrorMessage(err: unknown): string {
@@ -40,8 +40,8 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      await login(email.trim(), password)
-      navigate('/', { replace: true })
+      const { role } = await login(email.trim(), password)
+      navigate(role === 'super_admin' ? '/' : '/portal', { replace: true })
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {

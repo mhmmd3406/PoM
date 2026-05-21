@@ -1,9 +1,12 @@
-import { useState, useMemo, ReactNode } from 'react'
+import { useState, useMemo, useEffect, useCallback, ReactNode } from 'react'
+import { Pagination } from './Pagination'
+import { exportToXlsx } from '../utils/exportXlsx'
 
 export interface Column<T> {
   key: keyof T | string
   header: string
   render?: (row: T) => ReactNode
+  exportValue?: (row: T) => string | number
   sortable?: boolean
   className?: string
 }
@@ -19,6 +22,7 @@ interface DataTableProps<T> {
   searchPlaceholder?: string
   actions?: ReactNode
   rowClassName?: (row: T) => string
+  exportFilename?: string
 }
 
 type SortDir = 'asc' | 'desc'
@@ -34,9 +38,17 @@ export function DataTable<T>({
   searchPlaceholder = 'Ara…',
   actions,
   rowClassName,
+  exportFilename,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Reset to first page when data changes (filter/search applied)
+  useEffect(() => {
+    setPage(0)
+  }, [data])
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -58,6 +70,28 @@ export function DataTable<T>({
       return sortDir === 'asc' ? cmp : -cmp
     })
   }, [data, sortKey, sortDir])
+
+  const paginated = useMemo(
+    () => sorted.slice(page * pageSize, (page + 1) * pageSize),
+    [sorted, page, pageSize],
+  )
+
+  const handleExport = useCallback(() => {
+    const rows = sorted.map((row) => {
+      const obj: Record<string, unknown> = {}
+      for (const col of columns) {
+        const key = String(col.key)
+        if (key === 'actions') continue
+        if (col.exportValue) {
+          obj[col.header] = col.exportValue(row)
+        } else {
+          obj[col.header] = (row as Record<string, unknown>)[key] ?? ''
+        }
+      }
+      return obj
+    })
+    exportToXlsx(rows, exportFilename ?? 'export')
+  }, [sorted, columns, exportFilename])
 
   return (
     <div className="card overflow-hidden">
@@ -121,14 +155,14 @@ export function DataTable<T>({
                   ))}
                 </tr>
               ))
-            ) : sorted.length === 0 ? (
+            ) : paginated.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-10 text-center text-sm text-gray-400">
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              sorted.map((row) => (
+              paginated.map((row) => (
                 <tr
                   key={keyExtractor(row)}
                   className={`hover:bg-gray-50 transition-colors ${rowClassName ? rowClassName(row) : ''}`}
@@ -149,6 +183,18 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {!loading && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={sorted.length}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(0) }}
+          onExport={exportFilename ? handleExport : undefined}
+        />
+      )}
     </div>
   )
 }

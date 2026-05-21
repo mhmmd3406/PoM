@@ -162,6 +162,7 @@ export default function CompaniesPage() {
       key: 'name',
       header: 'Şirket Adı',
       sortable: true,
+      exportValue: (c) => c.name ?? c.id,
       render: (c) => (
         <div>
           <p className="text-sm font-medium text-gray-900">{c.name ?? '—'}</p>
@@ -173,17 +174,20 @@ export default function CompaniesPage() {
       key: 'plan',
       header: 'Plan',
       sortable: true,
+      exportValue: (c) => c.plan ?? 'free',
       render: (c) => <PlanBadge plan={c.plan} />,
     },
     {
       key: 'industry',
       header: 'Sektör',
       sortable: true,
+      exportValue: (c) => c.industry ?? '',
       render: (c) => <span className="text-sm text-gray-600">{c.industry ?? '—'}</span>,
     },
     {
       key: 'userCount',
       header: 'Kullanıcı',
+      exportValue: (c) => userCountMap[c.id] ?? 0,
       render: (c) => (
         <span className="text-sm font-semibold tabular-nums text-gray-800">
           {(userCountMap[c.id] ?? 0).toLocaleString('tr-TR')}
@@ -194,6 +198,7 @@ export default function CompaniesPage() {
       key: 'employee_count',
       header: 'Çalışan',
       sortable: true,
+      exportValue: (c) => c.employee_count ?? '',
       render: (c) => (
         <span className="text-sm tabular-nums text-gray-600">
           {c.employee_count?.toLocaleString('tr-TR') ?? '—'}
@@ -204,11 +209,13 @@ export default function CompaniesPage() {
       key: 'created_at',
       header: 'Oluşturulma',
       sortable: true,
+      exportValue: (c) => tsToString(c.created_at),
       render: (c) => <span className="text-xs text-gray-500">{tsToString(c.created_at)}</span>,
     },
     {
       key: 'active',
       header: 'Durum',
+      exportValue: (c) => c.active !== false ? 'Aktif' : 'Pasif',
       render: (c) => (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
           c.active !== false ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
@@ -268,6 +275,7 @@ export default function CompaniesPage() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Şirket adı, ID ara…"
+        exportFilename="pom-sirketler"
       />
 
       {detailCompany && (
