@@ -12,3 +12,11 @@ mobile/.flutter-plugins-dependencies
 # Android local config
 mobile/android/local.properties
 mobile/android/key.properties
+
+# Service account keys — NEVER commit these
+scripts/sa_key.json
+scripts/serviceAccountKey.json
+scripts/*.key.json
+
+# Build logs
+mobile/build_log.txt

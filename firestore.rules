@@ -1,0 +1,34 @@
+﻿rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() { return request.auth != null; }
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.is_admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+    function isOwner(uid) { return isAuthenticated() && request.auth.uid == uid; }
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+    match /checkins/{checkinId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+    match /platform_config/{doc} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+    match /companies/{companyId} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+    match /insights/{insightId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /wallets/{userId} { allow read: if isOwner(userId) || isAdmin(); allow write: if false; }
+    match /subscriptions/{userId} { allow read: if isOwner(userId) || isAdmin(); allow write: if false; }
+    match /admins/{uid} { allow read: if isAdmin(); allow write: if false; }
+    match /{document=**} { allow read, write: if isAdmin(); }
+  }
+}

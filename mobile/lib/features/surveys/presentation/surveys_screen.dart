@@ -1,122 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
-
-// ─── Static demo data ──────────────────────────────────────────────────────────
-
-class _SurveyItem {
-  const _SurveyItem({
-    required this.title,
-    required this.desc,
-    required this.emoji,
-    this.questionCount = 0,
-    this.responseCount = 0,
-    this.participationRate = 0,
-    this.deadline,
-    this.isDraft = false,
-    this.isDone = false,
-  });
-
-  final String title;
-  final String desc;
-  final String emoji;
-  final int questionCount;
-  final int responseCount;
-  final int participationRate;
-  final String? deadline;
-  final bool isDraft;
-  final bool isDone;
-}
-
-const _kActiveSurveys = [
-  _SurveyItem(
-    title: 'Hibrit Çalışma Modeli',
-    desc: 'İK tarafından gönderildi',
-    emoji: '🏠',
-    questionCount: 8,
-    responseCount: 124,
-    participationRate: 67,
-    deadline: '24 May',
-  ),
-  _SurveyItem(
-    title: 'Q2 Refah Anketi',
-    desc: 'Çeyreklik gözden geçirme',
-    emoji: '🌱',
-    questionCount: 12,
-    responseCount: 89,
-    participationRate: 48,
-    deadline: '02 Haz',
-  ),
-  _SurveyItem(
-    title: 'Eğitim Beklentileri',
-    desc: 'L&D ekibi',
-    emoji: '📚',
-    questionCount: 6,
-    responseCount: 201,
-    participationRate: 87,
-    deadline: '20 May',
-  ),
-];
-
-const _kDraftSurveys = [
-  _SurveyItem(
-    title: 'Yönetici Geri Bildirim',
-    desc: '4 soru hazır',
-    emoji: '💬',
-    questionCount: 4,
-    isDraft: true,
-  ),
-  _SurveyItem(
-    title: 'Ofis Olanakları',
-    desc: 'Henüz başlatılmadı',
-    emoji: '🪑',
-    questionCount: 0,
-    isDraft: true,
-  ),
-];
-
-const _kCompletedSurveys = [
-  _SurveyItem(
-    title: 'Q1 Refah Anketi',
-    desc: '20 Mar - 03 Nis',
-    emoji: '✅',
-    questionCount: 12,
-    responseCount: 312,
-    participationRate: 84,
-    isDone: true,
-  ),
-  _SurveyItem(
-    title: 'Yeni İşe Alım Deneyimi',
-    desc: '15 Şub - 28 Şub',
-    emoji: '🌟',
-    questionCount: 8,
-    responseCount: 28,
-    participationRate: 72,
-    isDone: true,
-  ),
-  _SurveyItem(
-    title: 'İletişim Tercihleri',
-    desc: '01 Şub',
-    emoji: '📨',
-    questionCount: 5,
-    responseCount: 287,
-    participationRate: 79,
-    isDone: true,
-  ),
-];
+import '../providers/surveys_provider.dart';
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
-class SurveysScreen extends StatefulWidget {
+class SurveysScreen extends ConsumerStatefulWidget {
   const SurveysScreen({super.key});
 
   @override
-  State<SurveysScreen> createState() => _SurveysScreenState();
+  ConsumerState<SurveysScreen> createState() => _SurveysScreenState();
 }
 
-class _SurveysScreenState extends State<SurveysScreen> {
+class _SurveysScreenState extends ConsumerState<SurveysScreen> {
   String _activeTab = 'active';
 
   @override
@@ -129,11 +29,14 @@ class _SurveysScreenState extends State<SurveysScreen> {
     final bgAlt   = isDark ? AppColors.darkBgAlt    : AppColors.lightBgAlt;
     final border  = isDark ? AppColors.borderDark   : AppColors.borderLight;
 
-    final surveys = switch (_activeTab) {
-      'draft'     => _kDraftSurveys,
-      'completed' => _kCompletedSurveys,
-      _           => _kActiveSurveys,
-    };
+    final pendingAsync   = ref.watch(pendingSurveysProvider);
+    final completedAsync = ref.watch(completedSurveysProvider);
+
+    final pendingList   = pendingAsync.valueOrNull   ?? [];
+    final completedList = completedAsync.valueOrNull ?? [];
+    final isLoading     = pendingAsync.isLoading || completedAsync.isLoading;
+
+    final surveys = _activeTab == 'completed' ? completedList : pendingList;
 
     return Scaffold(
       backgroundColor: bg,
@@ -156,6 +59,15 @@ class _SurveysScreenState extends State<SurveysScreen> {
                       ),
                     ),
                   ),
+                  if (isLoading)
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: ink3,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -174,7 +86,7 @@ class _SurveysScreenState extends State<SurveysScreen> {
                   children: [
                     _TabSegment(
                       label: 'Aktif',
-                      count: _kActiveSurveys.length,
+                      count: pendingList.length,
                       active: _activeTab == 'active',
                       surface: surface,
                       ink: ink,
@@ -182,17 +94,8 @@ class _SurveysScreenState extends State<SurveysScreen> {
                       onTap: () => setState(() => _activeTab = 'active'),
                     ),
                     _TabSegment(
-                      label: 'Taslak',
-                      count: _kDraftSurveys.length,
-                      active: _activeTab == 'draft',
-                      surface: surface,
-                      ink: ink,
-                      ink3: ink3,
-                      onTap: () => setState(() => _activeTab = 'draft'),
-                    ),
-                    _TabSegment(
                       label: 'Tamamlanan',
-                      count: _kCompletedSurveys.length,
+                      count: completedList.length,
                       active: _activeTab == 'completed',
                       surface: surface,
                       ink: ink,
@@ -206,22 +109,27 @@ class _SurveysScreenState extends State<SurveysScreen> {
 
             // Survey list
             Expanded(
-              child: surveys.isEmpty
-                  ? _SurveysEmptyState(activeTab: _activeTab, ink: ink, ink3: ink3)
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                      itemCount: surveys.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, i) => _SurveyCard(
-                        item: surveys[i],
-                        isDark: isDark,
-                        surface: surface,
-                        border: border,
-                        ink: ink,
-                        ink3: ink3,
-                        bgAlt: bgAlt,
-                      ),
-                    ),
+              child: isLoading && surveys.isEmpty
+                  ? _LoadingSkeleton(surface: surface, border: border)
+                  : surveys.isEmpty
+                      ? _SurveysEmptyState(
+                          activeTab: _activeTab, ink: ink, ink3: ink3)
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                          itemCount: surveys.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (context, i) => _SurveyCard(
+                            survey: surveys[i],
+                            isDone: _activeTab == 'completed',
+                            isDark: isDark,
+                            surface: surface,
+                            border: border,
+                            ink: ink,
+                            ink3: ink3,
+                            bgAlt: bgAlt,
+                          ),
+                        ),
             ),
           ],
         ),
@@ -264,6 +172,31 @@ class _SurveysScreenState extends State<SurveysScreen> {
   }
 }
 
+// ─── Loading skeleton ──────────────────────────────────────────────────────────
+
+class _LoadingSkeleton extends StatelessWidget {
+  const _LoadingSkeleton({required this.surface, required this.border});
+  final Color surface;
+  final Color border;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+      itemCount: 3,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, __) => Container(
+        height: 88,
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: border),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Empty state ───────────────────────────────────────────────────────────────
 
 class _SurveysEmptyState extends StatelessWidget {
@@ -279,11 +212,11 @@ class _SurveysEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (emoji, title, subtitle) = switch (activeTab) {
-      'draft'     => ('✏️', 'Taslak anket yok', 'Henüz taslak oluşturulmadı.'),
-      'completed' => ('📋', 'Tamamlanan anket yok', 'Tamamlanan anketler burada görünecek.'),
-      _           => ('📭', 'Şu an anket yok', 'Aktif anket bulunmuyor.\nBir sonraki anket yakında gelecek.'),
-    };
+    final (emoji, title, subtitle) = activeTab == 'completed'
+        ? ('📋', 'Henüz tamamlanan yok',
+            'Yanıtladığın anketler burada görünecek.')
+        : ('📭', 'Şu an aktif anket yok',
+            'Bir sonraki anket yakında gelecek.');
 
     return Center(
       child: Padding(
@@ -348,7 +281,13 @@ class _TabSegment extends StatelessWidget {
             color: active ? surface : Colors.transparent,
             borderRadius: BorderRadius.circular(9),
             boxShadow: active
-                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 6, offset: const Offset(0, 2))]
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.07),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    )
+                  ]
                 : null,
           ),
           child: Row(
@@ -358,15 +297,19 @@ class _TabSegment extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight:
+                      active ? FontWeight.w700 : FontWeight.w500,
                   color: active ? ink : ink3,
                 ),
               ),
               const SizedBox(width: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
-                  color: active ? AppColors.blueSoft : Colors.transparent,
+                  color: active
+                      ? AppColors.blueSoft
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(5),
                 ),
                 child: Text(
@@ -374,7 +317,8 @@ class _TabSegment extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: active ? AppColors.blueDeep : ink3,
+                    color:
+                        active ? AppColors.blueDeep : ink3,
                   ),
                 ),
               ),
@@ -390,7 +334,8 @@ class _TabSegment extends StatelessWidget {
 
 class _SurveyCard extends StatelessWidget {
   const _SurveyCard({
-    required this.item,
+    required this.survey,
+    required this.isDone,
     required this.isDark,
     required this.surface,
     required this.border,
@@ -399,7 +344,8 @@ class _SurveyCard extends StatelessWidget {
     required this.bgAlt,
   });
 
-  final _SurveyItem item;
+  final SurveyModel survey;
+  final bool isDone;
   final bool isDark;
   final Color surface;
   final Color border;
@@ -407,8 +353,17 @@ class _SurveyCard extends StatelessWidget {
   final Color ink3;
   final Color bgAlt;
 
+  String _deadlineLabel() {
+    final d = survey.deadline;
+    if (d == null) return '';
+    return DateFormat('d MMM', 'tr_TR').format(d);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final sourceLabel =
+        survey.isAdminSurvey ? 'PoM Platform' : 'Şirketiniz';
+
     return Container(
       decoration: BoxDecoration(
         color: surface,
@@ -417,10 +372,9 @@ class _SurveyCard extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: item.isDraft ? null : () {
-          final id = item.title.toLowerCase().replaceAll(' ', '-');
-          context.push('/survey/$id/answer');
-        },
+        onTap: isDone
+            ? null
+            : () => context.push('/survey/${survey.id}/answer'),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -437,7 +391,8 @@ class _SurveyCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                     ),
                     alignment: Alignment.center,
-                    child: Text(item.emoji, style: const TextStyle(fontSize: 22)),
+                    child: Text(survey.emoji,
+                        style: const TextStyle(fontSize: 22)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -445,7 +400,7 @@ class _SurveyCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          item.title,
+                          survey.title,
                           style: GoogleFonts.bricolageGrotesque(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -455,96 +410,81 @@ class _SurveyCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${item.desc} · ${item.questionCount} soru',
+                          '$sourceLabel · ${survey.questionCount} soru',
                           style: TextStyle(fontSize: 11.5, color: ink3),
                         ),
                       ],
                     ),
                   ),
-                  Icon(Icons.chevron_right_rounded, size: 18, color: ink3),
+                  if (isDone)
+                    Icon(Icons.check_circle_rounded,
+                        size: 18, color: AppColors.sage)
+                  else
+                    Icon(Icons.chevron_right_rounded,
+                        size: 18, color: ink3),
                 ],
               ),
 
-              // Progress bar (active/completed)
-              if (!item.isDraft) ...[
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Katılım · ${item.responseCount}/${(item.responseCount / (item.participationRate / 100)).round()}',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: ink3,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    Text(
-                      item.isDone
-                          ? '${item.participationRate}% · tamamlandı'
-                          : '${item.participationRate}% · ${item.deadline}\'a kadar',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: item.isDone ? AppColors.sageDeep : (isDark ? AppColors.darkInk2 : AppColors.lightInk2),
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: item.participationRate / 100,
-                    minHeight: 4,
-                    backgroundColor: isDark ? AppColors.darkBgAlt : AppColors.lightBgAlt,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      item.isDone ? AppColors.sage : AppColors.blue,
+              // Participation row
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(
+                    'KATILIM',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: ink3,
+                      letterSpacing: 0.5,
                     ),
                   ),
-                ),
-              ],
-
-              // Draft action buttons
-              if (item.isDraft) ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {},
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: border),
-                          backgroundColor: isDark ? AppColors.darkBg : AppColors.lightBg,
-                          foregroundColor: isDark ? AppColors.darkInk2 : AppColors.lightInk2,
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          minimumSize: const Size(0, 32),
-                        ),
-                        child: const Text('Düzenle', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
-                      ),
+                  const SizedBox(width: 6),
+                  Container(width: 3, height: 3, decoration: BoxDecoration(color: ink3, shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${survey.responseCount} yanıt',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: isDone ? AppColors.sageDeep : ink3,
+                      letterSpacing: 0.2,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () {},
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          minimumSize: const Size(0, 32),
-                        ),
-                        child: const Text('Yayınla', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
-                      ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    isDone
+                        ? 'Tamamlandı ✓'
+                        : survey.deadline != null
+                            ? '${_deadlineLabel()}\'a kadar'
+                            : 'Süresiz',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: isDone
+                          ? AppColors.sageDeep
+                          : (isDark ? AppColors.darkInk2 : AppColors.lightInk2),
+                      letterSpacing: 0.3,
                     ),
-                  ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: survey.minNThreshold > 0
+                      ? (survey.responseCount / survey.minNThreshold)
+                          .clamp(0.0, 1.0)
+                      : 0,
+                  minHeight: 3,
+                  backgroundColor: isDark
+                      ? AppColors.darkBgAlt
+                      : AppColors.lightBgAlt,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isDone ? AppColors.sage : AppColors.blue,
+                  ),
                 ),
-              ],
+              ),
             ],
           ),
         ),

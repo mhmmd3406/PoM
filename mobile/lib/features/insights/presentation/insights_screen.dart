@@ -197,7 +197,7 @@ class _InsightsContent extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
             child: Text(
-              'İçgörülerim',
+              'İçgörüler',
               style: GoogleFonts.bricolageGrotesque(
                 fontSize: 26,
                 fontWeight: FontWeight.w600,
