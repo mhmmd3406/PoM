@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/auth_repository.dart';
@@ -183,6 +184,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ),
               ),
               const SizedBox(height: 16),
+              if (kDebugMode)
+                TextButton(
+                  onPressed: () => ref
+                      .read(authStateNotifierProvider.notifier)
+                      .signInAsTestUser(),
+                  child: const Text(
+                    '🛠 Test Girişi (Debug)',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              const SizedBox(height: 8),
               Text(
                 'Giriş yaparak KVKK aydınlatma metnini\nokumayı ve onaylamayı kabul etmiş olursunuz.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(

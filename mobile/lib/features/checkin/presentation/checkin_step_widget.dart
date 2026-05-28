@@ -57,7 +57,7 @@ class CheckinStepWidget extends StatefulWidget {
 
   final CheckinStepData stepData;
   final int? selectedValue; // 1–5, null if unselected
-  final ValueChanged<int> onSelect;
+  final Future<void> Function(int) onSelect;
 
   @override
   State<CheckinStepWidget> createState() => _CheckinStepWidgetState();

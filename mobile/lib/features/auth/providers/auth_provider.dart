@@ -143,6 +143,23 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
     _notifyListeners();
   }
 
+  // ignore: avoid_field_initializers_in_const_classes
+  void signInAsTestUser() {
+    state = AuthState(
+      user: const UserModel(
+        uid: 'test-uid-001',
+        linkedinHash: 'test-hash',
+        displayName: 'Test Kullanıcı',
+        email: 'test@pom.app',
+        role: 'pro',
+        kvkkAccepted: true,
+        kvkkVersion: '1.0',
+        creditBalance: 100,
+      ),
+    );
+    _notifyListeners();
+  }
+
   String _mapError(Object e) {
     final msg = e.toString().toLowerCase();
     if (msg.contains('network') || msg.contains('unavailable')) {
