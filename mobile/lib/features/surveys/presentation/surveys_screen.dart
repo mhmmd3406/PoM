@@ -35,6 +35,11 @@ class _SurveysScreenState extends ConsumerState<SurveysScreen> {
     final pendingList   = pendingAsync.valueOrNull   ?? [];
     final completedList = completedAsync.valueOrNull ?? [];
     final isLoading     = pendingAsync.isLoading || completedAsync.isLoading;
+    // Surface read failures (e.g. permission-denied when not authenticated)
+    // instead of masking them as an empty list.
+    final hasError = (pendingAsync.hasError || completedAsync.hasError) &&
+        pendingList.isEmpty &&
+        completedList.isEmpty;
 
     final surveys = _activeTab == 'completed' ? completedList : pendingList;
 
@@ -111,7 +116,14 @@ class _SurveysScreenState extends ConsumerState<SurveysScreen> {
             Expanded(
               child: isLoading && surveys.isEmpty
                   ? _LoadingSkeleton(surface: surface, border: border)
-                  : surveys.isEmpty
+                  : hasError
+                      ? _SurveysErrorState(
+                          ink: ink,
+                          ink3: ink3,
+                          onRetry: () =>
+                              ref.invalidate(surveysRepositoryProvider),
+                        )
+                      : surveys.isEmpty
                       ? _SurveysEmptyState(
                           activeTab: _activeTab, ink: ink, ink3: ink3)
                       : ListView.separated(
@@ -241,6 +253,62 @@ class _SurveysEmptyState extends StatelessWidget {
               subtitle,
               style: TextStyle(fontSize: 13, color: ink3, height: 1.5),
               textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Error state ───────────────────────────────────────────────────────────────
+
+class _SurveysErrorState extends StatelessWidget {
+  const _SurveysErrorState({
+    required this.ink,
+    required this.ink3,
+    required this.onRetry,
+  });
+
+  final Color ink;
+  final Color ink3;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('⚠️', style: TextStyle(fontSize: 52)),
+            const SizedBox(height: 16),
+            Text(
+              'Anketler yüklenemedi',
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: ink,
+                letterSpacing: -0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Oturum veya bağlantı doğrulanamadı. Lütfen tekrar dene.',
+              style: TextStyle(fontSize: 13, color: ink3, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: onRetry,
+              style: ElevatedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Tekrar Dene',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
             ),
           ],
         ),

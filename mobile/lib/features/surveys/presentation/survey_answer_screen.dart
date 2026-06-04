@@ -4,20 +4,30 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../features/auth/providers/auth_provider.dart';
 import '../data/survey_model.dart';
 import '../providers/surveys_provider.dart';
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
 class SurveyAnswerScreen extends ConsumerStatefulWidget {
-  const SurveyAnswerScreen({super.key, required this.surveyId});
+  const SurveyAnswerScreen({
+    super.key,
+    required this.surveyId,
+    // When false the close/skip button is hidden entirely (mandatory gate mode).
+    this.canClose = true,
+    // When true shows "Atla" text instead of the ✕ icon (gate survey skip mode).
+    this.showSkip = false,
+    // Custom handler for the skip action; defaults to context.pop() when null.
+    this.onSkip,
+  });
 
   final String surveyId;
+  final bool canClose;
+  final bool showSkip;
+  final VoidCallback? onSkip;
 
   @override
-  ConsumerState<SurveyAnswerScreen> createState() =>
-      _SurveyAnswerScreenState();
+  ConsumerState<SurveyAnswerScreen> createState() => _SurveyAnswerScreenState();
 }
 
 enum _LoadState { loading, alreadyAnswered, ready, submitting, done, error }
@@ -38,10 +48,10 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
 
   Future<void> _load() async {
     final repo = ref.read(surveysRepositoryProvider);
-    final user = ref.read(currentUserProvider);
 
     try {
       final survey = await repo.getSurvey(widget.surveyId);
+      if (!mounted) return;
       if (survey == null) {
         setState(() {
           _loadState = _LoadState.error;
@@ -50,13 +60,11 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
         return;
       }
 
-      if (user != null) {
-        final hash = hashUserId(user.uid);
-        final responded = await repo.hasResponded(widget.surveyId, hash);
-        if (responded) {
-          setState(() => _loadState = _LoadState.alreadyAnswered);
-          return;
-        }
+      final responded = await repo.hasResponded(widget.surveyId);
+      if (!mounted) return;
+      if (responded) {
+        setState(() => _loadState = _LoadState.alreadyAnswered);
+        return;
       }
 
       setState(() {
@@ -64,6 +72,7 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
         _loadState = _LoadState.ready;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _loadState = _LoadState.error;
         _errorMsg = 'Anket yüklenemedi. Lütfen tekrar deneyin.';
@@ -73,14 +82,12 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
 
   Future<void> _submit() async {
     final survey = _survey;
-    final user = ref.read(currentUserProvider);
     if (survey == null) return;
 
     setState(() => _loadState = _LoadState.submitting);
 
     try {
       final repo = ref.read(surveysRepositoryProvider);
-      final hash = user != null ? hashUserId(user.uid) : 'anonymous';
 
       // Build answers map: questionId → answer value
       final answersMap = <String, dynamic>{};
@@ -94,12 +101,13 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
       await repo.submitResponse(
         surveyId: survey.id,
         companyId: survey.companyId,
-        userIdHash: hash,
         answers: answersMap,
       );
 
+      if (!mounted) return;
       setState(() => _loadState = _LoadState.done);
     } catch (_) {
+      if (!mounted) return;
       setState(() => _loadState = _LoadState.ready);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -168,165 +176,221 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
     final ink3 = isDark ? AppColors.darkInk3 : AppColors.lightInk3;
     final border = isDark ? AppColors.borderDark : AppColors.borderLight;
 
-    final sourceLabel =
-        survey.isAdminSurvey ? 'PoM Platform' : 'Şirketiniz';
+    final sourceLabel = survey.isAdminSurvey ? 'PoM Platform' : 'Şirketiniz';
 
+    // NOTE: Header and bottom action bar are laid out inside the Scaffold body
+    // (SafeArea > Column) instead of the Scaffold appBar/bottomNavigationBar
+    // slots. A PreferredSize(AppBar) in the appBar slot was leaving the body
+    // slot un-laid-out (NEEDS-LAYOUT) on some devices, so the question/input
+    // never painted. This single-column layout mirrors the working surveys list
+    // screen and renders reliably.
     return Scaffold(
       backgroundColor: bg,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(64),
-        child: AppBar(
-          backgroundColor: bg,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          titleSpacing: 0,
-          title: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: _back,
-                  child: Icon(Icons.arrow_back_rounded, size: 22, color: ink2),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'SORU ${_step + 1} / $total  •  ${(progress * 100).round()}%',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: ink3,
-                          letterSpacing: 0.4,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header: back, progress, skip/close
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: _back,
+                    child:
+                        Icon(Icons.arrow_back_rounded, size: 22, color: ink2),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'SORU ${_step + 1} / $total  •  ${(progress * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: ink3,
+                            letterSpacing: 0.4,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 5),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 4,
-                          backgroundColor: isDark
+                        const SizedBox(height: 5),
+                        // Custom progress bar (a Material LinearProgressIndicator
+                        // is avoided here — see the bottom-bar note).
+                        Container(
+                          height: 4,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.darkBgAlt
+                                : AppColors.lightBgAlt,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: progress.clamp(0.0, 1.0),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.blue,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  if (widget.canClose)
+                    GestureDetector(
+                      onTap: widget.onSkip ?? () => context.pop(),
+                      child: widget.showSkip
+                          ? Text(
+                              'Atla',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: ink3,
+                              ),
+                            )
+                          : Icon(Icons.close_rounded, size: 20, color: ink3),
+                    )
+                  else
+                    const SizedBox(width: 20),
+                ],
+              ),
+            ),
+
+            // Scrollable question content.
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                children: [
+                  // Survey label + anon note
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isDark
                               ? AppColors.darkBgAlt
                               : AppColors.lightBgAlt,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppColors.blue),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${survey.title} · $sourceLabel',
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: ink3,
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                          color: AppColors.sage,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          'Anonim kaydedilir',
+                          style: TextStyle(fontSize: 11, color: ink3),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: () => context.pop(),
-                  child: Icon(Icons.close_rounded, size: 20, color: ink3),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton.icon(
-                onPressed: _step > 0 ? _back : null,
-                icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                label: const Text('Geri'),
-                style: TextButton.styleFrom(foregroundColor: ink2),
-              ),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: answered != null ? _next : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(
-                    isLast ? 'Gönder' : 'İleri →',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Survey label + anon note
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.darkBgAlt
-                        : AppColors.lightBgAlt,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${survey.title} · $sourceLabel',
-                    style: TextStyle(
-                        fontSize: 11.5,
-                        color: ink3,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 4,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    color: AppColors.sage,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Flexible(
-                  child: Text(
-                    'Anonim kaydedilir',
-                    style: TextStyle(fontSize: 11, color: ink3),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
 
-            const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-            Text(
-              q.text,
-              style: GoogleFonts.bricolageGrotesque(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: ink,
-                height: 1.25,
-                letterSpacing: -0.5,
+                  Text(
+                    q.text,
+                    style: GoogleFonts.bricolageGrotesque(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: ink,
+                      height: 1.25,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  if (q.hint.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(q.hint,
+                        style:
+                            TextStyle(fontSize: 14, color: ink2, height: 1.4)),
+                  ],
+                  const SizedBox(height: 28),
+
+                  // Input widget based on question type
+                  _buildInput(q, answered, isDark, border, ink, ink2, ink3),
+                ],
               ),
             ),
-            if (q.hint.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(q.hint,
-                  style: TextStyle(fontSize: 14, color: ink2, height: 1.4)),
-            ],
-            const SizedBox(height: 28),
 
-            // Input widget based on question type
-            _buildInput(q, answered, isDark, border, ink, ink2, ink3),
+            // Bottom action bar: Geri / İleri-Gönder.
+            // NOTE: built from GestureDetector + Container instead of
+            // TextButton/ElevatedButton. On this Flutter version a Material
+            // ButtonStyleButton placed as a non-flex child of this Column (which
+            // also has an Expanded child) aborts the Column's performLayout,
+            // silently leaving the whole question body un-laid-out / blank.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    onTap: _step > 0 ? _back : null,
+                    behavior: HitTestBehavior.opaque,
+                    child: Opacity(
+                      opacity: _step > 0 ? 1 : 0.35,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.arrow_back_rounded, size: 16, color: ink2),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Geri',
+                            style: TextStyle(
+                                color: ink2,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: answered != null ? _next : null,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: answered != null
+                            ? AppColors.blue
+                            : AppColors.blue.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        isLast ? 'Gönder' : 'İleri →',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -461,8 +525,7 @@ class _ErrorView extends StatelessWidget {
               const Text('⚠️', style: TextStyle(fontSize: 48)),
               const SizedBox(height: 16),
               Text(message,
-                  style: TextStyle(color: ink),
-                  textAlign: TextAlign.center),
+                  style: TextStyle(color: ink), textAlign: TextAlign.center),
               const SizedBox(height: 24),
               ElevatedButton(
                   onPressed: onRetry, child: const Text('Tekrar Dene')),
@@ -597,9 +660,7 @@ class _ThankYouScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.darkBgAlt
-                        : AppColors.lightBgAlt,
+                    color: isDark ? AppColors.darkBgAlt : AppColors.lightBgAlt,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
@@ -688,8 +749,7 @@ class _Emoji5Input extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(_kEmojis[i],
-                          style: const TextStyle(fontSize: 28)),
+                      Text(_kEmojis[i], style: const TextStyle(fontSize: 28)),
                     ],
                   ),
                 ),
@@ -956,14 +1016,10 @@ class _Scale10Input extends StatelessWidget {
           children: [
             Text('0 · HİÇ',
                 style: TextStyle(
-                    fontSize: 11,
-                    color: ink3,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: 11, color: ink3, fontWeight: FontWeight.w600)),
             Text('10 · KESİNLİKLE',
                 style: TextStyle(
-                    fontSize: 11,
-                    color: ink3,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: 11, color: ink3, fontWeight: FontWeight.w600)),
           ],
         ),
         const SizedBox(height: 12),
@@ -1058,9 +1114,8 @@ class _TextInputState extends State<_TextInput> {
         hintText: 'Yanıtını buraya yaz…',
         hintStyle: TextStyle(color: widget.ink3),
         filled: true,
-        fillColor: widget.isDark
-            ? AppColors.darkSurface
-            : AppColors.lightSurface,
+        fillColor:
+            widget.isDark ? AppColors.darkSurface : AppColors.lightSurface,
         contentPadding: const EdgeInsets.all(16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -1146,8 +1201,8 @@ class SurveyMinNLockScreen extends StatelessWidget {
                       height: 72,
                       decoration:
                           BoxDecoration(color: amberBg, shape: BoxShape.circle),
-                      child: Icon(Icons.lock_rounded,
-                          size: 34, color: amberCol),
+                      child:
+                          Icon(Icons.lock_rounded, size: 34, color: amberCol),
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -1196,8 +1251,7 @@ class SurveyMinNLockScreen extends StatelessWidget {
                         value: progress,
                         minHeight: 8,
                         backgroundColor: bgAlt,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(amberCol),
+                        valueColor: AlwaysStoppedAnimation<Color>(amberCol),
                       ),
                     ),
                   ],
@@ -1205,8 +1259,8 @@ class SurveyMinNLockScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: bgAlt,
                   borderRadius: BorderRadius.circular(14),
@@ -1220,8 +1274,8 @@ class SurveyMinNLockScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Gizliliğinizi korumak için minimum $minRequired yanıt eşiği uygulanmaktadır.',
-                        style: TextStyle(
-                            fontSize: 12.5, color: ink2, height: 1.5),
+                        style:
+                            TextStyle(fontSize: 12.5, color: ink2, height: 1.5),
                       ),
                     ),
                   ],
@@ -1239,8 +1293,8 @@ class SurveyMinNLockScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(14)),
                   ),
                   child: const Text('Geri Dön',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600)),
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
