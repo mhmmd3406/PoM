@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/constants/app_constants.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../models/insight_model.dart';
-import '../../auth/providers/auth_provider.dart';
 import '../providers/insights_provider.dart';
 import 'radar_chart_widget.dart';
+
+// ─── Dimension metadata ────────────────────────────────────────────────────────
 
 const _kDimensionOrder = [
   'overallMood',
@@ -17,297 +18,356 @@ const _kDimensionOrder = [
   'workLifeBalance',
 ];
 
-class InsightsScreen extends ConsumerWidget {
+const _kDimensionMeta = [
+  _DimensionMeta(key: 'overallMood',      label: 'Ruh Hali', emoji: '😊', color: AppColors.blue),
+  _DimensionMeta(key: 'workStress',       label: 'Stres',    emoji: '😌', color: AppColors.amber),
+  _DimensionMeta(key: 'teamHarmony',      label: 'Takım',    emoji: '🤝', color: AppColors.sage),
+  _DimensionMeta(key: 'personalGrowth',   label: 'Gelişim',  emoji: '🌱', color: Color(0xFF8AA67A)),
+  _DimensionMeta(key: 'workLifeBalance',  label: 'Denge',    emoji: '⚖️', color: AppColors.blue),
+];
+
+const _kFakeDeltas = [0.4, -0.2, 0.5, 0.0, 0.3];
+
+// Trend chart series data
+const _kTrendSeries = [
+  [3.6, 3.8, 4.0, 4.2], // blue  – Ruh Hali
+  [3.8, 3.6, 3.7, 3.5], // amber – Stres
+  [4.0, 4.2, 4.3, 4.5], // sage  – Takım
+  [4.0, 4.0, 4.0, 4.0], // moss  – Gelişim
+  [3.7, 3.8, 3.9, 4.0], // sky   – Denge
+];
+
+const _kTrendColors = [
+  AppColors.blue,
+  AppColors.amber,
+  AppColors.sage,
+  Color(0xFF8AA67A), // moss
+  Color(0xFFA6C6E8), // sky
+];
+
+const _kXLabels = ['H-3', 'H-2', 'H-1', 'Bu'];
+
+// ─── Screen ────────────────────────────────────────────────────────────────────
+
+class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InsightsScreen> createState() => _InsightsScreenState();
+}
+
+class _InsightsScreenState extends ConsumerState<InsightsScreen> {
+  String _selectedView = 'personal';
+
+  @override
+  Widget build(BuildContext context) {
     final insightsAsync = ref.watch(insightsStreamProvider);
-    final user = ref.watch(currentUserProvider);
-    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final bg      = isDark ? AppColors.darkBg      : AppColors.lightBg;
+    final surface = isDark ? AppColors.darkSurface  : AppColors.lightSurface;
+    final ink     = isDark ? AppColors.darkInk      : AppColors.lightInk;
+    final ink2    = isDark ? AppColors.darkInk2     : AppColors.lightInk2;
+    final ink3    = isDark ? AppColors.darkInk3     : AppColors.lightInk3;
+    final border  = isDark ? AppColors.borderDark   : AppColors.borderLight;
+    final bgAlt   = isDark ? AppColors.darkBgAlt    : AppColors.lightBgAlt;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('İçgörülerim'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.go('/'),
+      backgroundColor: bg,
+      body: SafeArea(
+        child: insightsAsync.when(
+          loading: () => const _InsightsSkeleton(),
+          error: (e, _) => _ErrorState(message: e.toString()),
+          data: (insights) {
+            if (insights == null) {
+              return _EmptyState(isDark: isDark, ink: ink, ink2: ink2);
+            }
+            return _InsightsContent(
+              insights: insights,
+              selectedView: _selectedView,
+              onViewChanged: (v) => setState(() => _selectedView = v),
+              isDark: isDark,
+              bg: bg,
+              surface: surface,
+              ink: ink,
+              ink2: ink2,
+              ink3: ink3,
+              border: border,
+              bgAlt: bgAlt,
+            );
+          },
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => ref.invalidate(insightsStreamProvider),
-            tooltip: 'Yenile',
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: 2,
+        onDestinationSelected: (index) {
+          const routes = ['/', '/checkin', '/insights', '/surveys', '/profile'];
+          context.go(routes[index]);
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Ana Sayfa',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.add_circle_outline_rounded),
+            selectedIcon: Icon(Icons.add_circle_rounded),
+            label: 'Check-in',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights_rounded),
+            label: 'İçgörüler',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.assignment_outlined),
+            selectedIcon: Icon(Icons.assignment_rounded),
+            label: 'Anketler',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Profil',
           ),
         ],
-      ),
-      body: insightsAsync.when(
-        loading: () => const _InsightsSkeleton(),
-        error: (e, _) => _ErrorState(message: e.toString()),
-        data: (insights) {
-          if (insights == null) {
-            return _EmptyState(
-              onCheckin: () => context.go('/checkin'),
-            );
-          }
-          return _InsightsContent(insights: insights, userRole: user?.role ?? 'free');
-        },
       ),
     );
   }
 }
 
-// ─── Content ──────────────────────────────────────────────────────────────────
+// ─── Full content ──────────────────────────────────────────────────────────────
 
 class _InsightsContent extends StatelessWidget {
   const _InsightsContent({
     required this.insights,
-    required this.userRole,
+    required this.selectedView,
+    required this.onViewChanged,
+    required this.isDark,
+    required this.bg,
+    required this.surface,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+    required this.border,
+    required this.bgAlt,
   });
 
   final InsightModel insights;
-  final String userRole;
+  final String selectedView;
+  final ValueChanged<String> onViewChanged;
+  final bool isDark;
+  final Color bg;
+  final Color surface;
+  final Color ink;
+  final Color ink2;
+  final Color ink3;
+  final Color border;
+  final Color bgAlt;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dateFormat = DateFormat('dd MMMM yyyy', 'tr_TR');
+    final personalList = insights.personalList;
+    final companyList  = insights.companyList.isNotEmpty ? insights.companyList : null;
 
-    final hasPro = userRole == 'pro' || userRole == 'enterprise' || userRole == 'daas';
+    // Derive highlight data from personalScores
+    final scores = insights.personalScores;
+    final sortedKeys = _kDimensionOrder
+        .where((k) => scores.containsKey(k))
+        .toList()
+      ..sort((a, b) => (scores[b] ?? 0).compareTo(scores[a] ?? 0));
 
-    return RefreshIndicator(
-      onRefresh: () async {},
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ScoreCard(
-              personalAvg: insights.personalAverage,
-              companyAvg: insights.companyAverage,
-              trend: insights.trend,
-              lastUpdated: dateFormat.format(insights.updatedAt),
-              totalCheckins: insights.totalCheckins,
-            ),
-            const SizedBox(height: 20),
+    final strongestKey = sortedKeys.isNotEmpty ? sortedKeys.first : null;
+    final weakestKey   = sortedKeys.length > 1  ? sortedKeys.last  : null;
 
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Boyut Analizi',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '5 boyutlu refah haritanız',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                    ),
-                    const SizedBox(height: 20),
-                    RadarChartWidget(
-                      personalScores: insights.personalList,
-                      companyScores: hasPro && insights.companyList.isNotEmpty
-                          ? insights.companyList
-                          : null,
-                      benchmarkScores:
-                          insights.benchmarkList.isNotEmpty
-                              ? insights.benchmarkList
-                              : null,
-                    ),
-                    if (!hasPro) ...[
-                      const SizedBox(height: 12),
-                      _ProUpgradeBanner(),
-                    ],
-                  ],
-                ),
+    final strongestMeta = strongestKey != null
+        ? _kDimensionMeta.firstWhere((m) => m.key == strongestKey,
+            orElse: () => _kDimensionMeta.first)
+        : null;
+    final weakestMeta = weakestKey != null
+        ? _kDimensionMeta.firstWhere((m) => m.key == weakestKey,
+            orElse: () => _kDimensionMeta.last)
+        : null;
+
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        // ── Page header ──────────────────────────────────────────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+            child: Text(
+              'İçgörüler',
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 26,
+                fontWeight: FontWeight.w600,
+                color: ink,
+                letterSpacing: -0.5,
               ),
             ),
-            const SizedBox(height: 20),
-
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Boyut Detayları',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 16),
-                    ...List.generate(
-                      AppConstants.checkinDimensions.length,
-                      (i) {
-                        final key = _kDimensionOrder[i];
-                        final personal = insights.personalScores[key] ?? 0;
-                        final company = insights.companyScores?[key];
-                        return _DimensionRow(
-                          dimension: AppConstants.checkinDimensions[i],
-                          personalScore: personal,
-                          companyScore: hasPro ? company : null,
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
+          ),
         ),
-      ),
+
+        // ── Toggle pill ───────────────────────────────────────────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            child: _TogglePill(
+              selected: selectedView,
+              onChanged: onViewChanged,
+              isDark: isDark,
+              bgAlt: bgAlt,
+              surface: surface,
+              ink: ink,
+              ink3: ink3,
+            ),
+          ),
+        ),
+
+        if (selectedView != 'comparison') ...[
+          // ── Radar card ──────────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _RadarCard(
+                displayScore: selectedView == 'company'
+                    ? insights.companyAverage
+                    : insights.personalAverage,
+                personalList: personalList,
+                companyList: companyList,
+                isDark: isDark,
+                surface: surface,
+                border: border,
+                ink: ink,
+                ink3: ink3,
+              ),
+            ),
+          ),
+
+          // ── Trend lines card ────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _TrendCard(
+                isDark: isDark,
+                surface: surface,
+                border: border,
+                ink: ink,
+                ink2: ink2,
+                ink3: ink3,
+              ),
+            ),
+          ),
+
+          // ── Delta cards ─────────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _DeltaSection(
+                insights: insights,
+                isDark: isDark,
+                surface: surface,
+                border: border,
+                ink: ink,
+                ink2: ink2,
+                ink3: ink3,
+              ),
+            ),
+          ),
+
+          // ── Highlights ──────────────────────────────────────────────────────
+          if (strongestMeta != null || weakestMeta != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _HighlightsSection(
+                  scores: scores,
+                  strongestMeta: strongestMeta,
+                  weakestMeta: weakestMeta,
+                  ink: ink,
+                  ink2: ink2,
+                ),
+              ),
+            ),
+        ] else ...[
+          // ── Comparison content ──────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _ComparisonSection(
+                isDark: isDark,
+                surface: surface,
+                border: border,
+                ink: ink,
+                ink2: ink2,
+                ink3: ink3,
+                bgAlt: bgAlt,
+              ),
+            ),
+          ),
+        ],
+
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+      ],
     );
   }
 }
 
-// ─── Score Card ───────────────────────────────────────────────────────────────
+// ─── Toggle pill ───────────────────────────────────────────────────────────────
 
-class _ScoreCard extends StatelessWidget {
-  const _ScoreCard({
-    required this.personalAvg,
-    required this.companyAvg,
-    required this.trend,
-    required this.lastUpdated,
-    required this.totalCheckins,
+class _TogglePill extends StatelessWidget {
+  const _TogglePill({
+    required this.selected,
+    required this.onChanged,
+    required this.isDark,
+    required this.bgAlt,
+    required this.surface,
+    required this.ink,
+    required this.ink3,
   });
 
-  final double personalAvg;
-  final double companyAvg;
-  final int? trend;
-  final String lastUpdated;
-  final int totalCheckins;
-
-  String _trendLabel(int? trend) {
-    if (trend == null) return '';
-    if (trend > 0) return '↑ İyileşiyor';
-    if (trend < 0) return '↓ Düşüyor';
-    return '→ Stabil';
-  }
-
-  Color _trendColor(BuildContext context, int? trend) {
-    if (trend == null) return Colors.transparent;
-    if (trend > 0) return const Color(0xFF4CAF50);
-    if (trend < 0) return const Color(0xFFF44336);
-    return Theme.of(context).colorScheme.onSurfaceVariant;
-  }
-
-  Color _scoreColor(double score) {
-    if (score >= 4) return const Color(0xFF4CAF50);
-    if (score >= 3) return const Color(0xFFFF9800);
-    return const Color(0xFFF44336);
-  }
+  final String selected;
+  final ValueChanged<String> onChanged;
+  final bool isDark;
+  final Color bgAlt;
+  final Color surface;
+  final Color ink;
+  final Color ink3;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Genel Skor',
-                        style:
-                            Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            personalAvg.toStringAsFixed(1),
-                            style: Theme.of(context)
-                                .textTheme
-                                .displaySmall
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: _scoreColor(personalAvg),
-                                ),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 6, left: 4),
-                            child: Text('/5.0'),
-                          ),
-                        ],
-                      ),
-                      if (trend != null)
-                        Text(
-                          _trendLabel(trend),
-                          style: TextStyle(
-                            color: _trendColor(context, trend),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    _StatBadge(
-                      icon: Icons.calendar_today_rounded,
-                      label: '$totalCheckins check-in',
-                    ),
-                    const SizedBox(height: 6),
-                    _StatBadge(
-                      icon: Icons.update_rounded,
-                      label: lastUpdated,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatBadge extends StatelessWidget {
-  const _StatBadge({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      height: 44,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        color: bgAlt,
+        borderRadius: BorderRadius.circular(12),
       ),
+      padding: const EdgeInsets.all(3),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+          _PillSegment(
+            label: 'Sen',
+            active: selected == 'personal',
+            surface: surface,
+            ink: ink,
+            ink3: ink3,
+            onTap: () => onChanged('personal'),
+          ),
+          _PillSegment(
+            label: 'Şirket',
+            active: selected == 'company',
+            surface: surface,
+            ink: ink,
+            ink3: ink3,
+            onTap: () => onChanged('company'),
+          ),
+          _PillSegment(
+            label: 'Karşılaştırma',
+            active: selected == 'comparison',
+            surface: surface,
+            ink: ink,
+            ink3: ink3,
+            onTap: () => onChanged('comparison'),
           ),
         ],
       ),
@@ -315,93 +375,652 @@ class _StatBadge extends StatelessWidget {
   }
 }
 
-// ─── Dimension row ────────────────────────────────────────────────────────────
-
-class _DimensionRow extends StatelessWidget {
-  const _DimensionRow({
-    required this.dimension,
-    required this.personalScore,
-    this.companyScore,
+class _PillSegment extends StatelessWidget {
+  const _PillSegment({
+    required this.label,
+    required this.active,
+    required this.surface,
+    required this.ink,
+    required this.ink3,
+    required this.onTap,
   });
 
-  final String dimension;
-  final double personalScore;
-  final double? companyScore;
-
-  Color _barColor(double score) {
-    if (score >= 4.0) return const Color(0xFF4CAF50);
-    if (score >= 3.0) return const Color(0xFFFF9800);
-    return const Color(0xFFF44336);
-  }
+  final String label;
+  final bool active;
+  final Color surface;
+  final Color ink;
+  final Color ink3;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          decoration: BoxDecoration(
+            color: active ? surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              color: active ? ink : ink3,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Radar card ────────────────────────────────────────────────────────────────
+
+class _RadarCard extends StatelessWidget {
+  const _RadarCard({
+    required this.displayScore,
+    required this.personalList,
+    required this.companyList,
+    required this.isDark,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink3,
+  });
+
+  final double displayScore;
+  final List<double> personalList;
+  final List<double>? companyList;
+  final bool isDark;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink3;
+
+  @override
+  Widget build(BuildContext context) {
+    final avg = displayScore;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border, width: 1),
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header row
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                dimension,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-              Row(
-                children: [
-                  Text(
-                    personalScore.toStringAsFixed(1),
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: _barColor(personalScore),
-                    ),
-                  ),
-                  if (companyScore != null) ...[
+              // Left: label + score
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      ' / ${companyScore!.toStringAsFixed(1)}',
+                      '5 BOYUT · SON 4 HAFTA',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: scheme.onSurfaceVariant,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: ink3,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${avg.toStringAsFixed(1)}/5',
+                      style: GoogleFonts.bricolageGrotesque(
+                        fontSize: 38,
+                        fontWeight: FontWeight.w600,
+                        color: ink,
+                        height: 1.0,
+                        letterSpacing: -1,
                       ),
                     ),
                   ],
+                ),
+              ),
+              // Right: legend
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _LegendItem(
+                    color: AppColors.blue,
+                    label: 'Sen',
+                    dashed: false,
+                    ink3: ink3,
+                  ),
+                  const SizedBox(height: 6),
+                  _LegendItem(
+                    color: ink3,
+                    label: 'Şirket',
+                    dashed: true,
+                    ink3: ink3,
+                  ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: 1,
-                  minHeight: 8,
-                  backgroundColor: scheme.surfaceContainerHighest,
-                  color: Colors.transparent,
-                ),
-              ),
-              if (companyScore != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: companyScore! / 5,
-                    minHeight: 8,
-                    backgroundColor: Colors.transparent,
-                    color: const Color(AppConstants.colorCompany).withOpacity(0.4),
+          const SizedBox(height: 16),
+          // Radar chart
+          Center(
+            child: RadarChartWidget(
+              personalScores: personalList,
+              companyScores: companyList,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({
+    required this.color,
+    required this.label,
+    required this.dashed,
+    required this.ink3,
+  });
+
+  final Color color;
+  final String label;
+  final bool dashed;
+  final Color ink3;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!dashed)
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          )
+        else
+          SizedBox(
+            width: 12,
+            child: Row(
+              children: List.generate(
+                3,
+                (i) => Expanded(
+                  child: Container(
+                    height: 2,
+                    margin: EdgeInsets.only(right: i < 2 ? 2 : 0),
+                    color: color,
                   ),
                 ),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: personalScore / 5,
-                  minHeight: 8,
-                  backgroundColor: Colors.transparent,
-                  color: _barColor(personalScore),
+              ),
+            ),
+          ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: ink3,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Trend card ────────────────────────────────────────────────────────────────
+
+class _TrendCard extends StatelessWidget {
+  const _TrendCard({
+    required this.isDark,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+  });
+
+  final bool isDark;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink2;
+  final Color ink3;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border, width: 1),
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Son 4 Check-in',
+                style: GoogleFonts.bricolageGrotesque(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: ink,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkBgAlt : AppColors.lightBgAlt,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '4 Hafta',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: ink3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Chart
+          SizedBox(
+            height: 140,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _TrendChartPainter(
+                isDark: isDark,
+                dividerColor: isDark ? AppColors.dividerDark : AppColors.dividerLight,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Dimension legend dots
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(_kDimensionMeta.length, (i) {
+              final meta = _kDimensionMeta[i];
+              final color = _kTrendColors[i];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      meta.label,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: ink3,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Trend chart painter ───────────────────────────────────────────────────────
+
+class _TrendChartPainter extends CustomPainter {
+  const _TrendChartPainter({
+    required this.isDark,
+    required this.dividerColor,
+  });
+
+  final bool isDark;
+  final Color dividerColor;
+
+  static const double _minY = 0.0;
+  static const double _maxY = 5.0;
+  static const double _leftPad  = 28.0;
+  static const double _rightPad = 8.0;
+  static const double _topPad   = 8.0;
+  static const double _bottomPad = 24.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final chartW = size.width  - _leftPad - _rightPad;
+    final chartH = size.height - _topPad  - _bottomPad;
+
+    double xOf(int col) => _leftPad + col * chartW / (_kXLabels.length - 1);
+    double yOf(double v) => _topPad + (1 - (v - _minY) / (_maxY - _minY)) * chartH;
+
+    // ── Grid lines at y = 1, 2, 3, 4 ──────────────────────────────────────────
+    final gridPaint = Paint()
+      ..color = dividerColor
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    final labelStyle = TextStyle(
+      color: isDark ? AppColors.darkInk3 : AppColors.lightInk3,
+      fontSize: 9,
+      fontWeight: FontWeight.w500,
+    );
+
+    for (final yVal in [1.0, 2.0, 3.0, 4.0]) {
+      final y = yOf(yVal);
+      canvas.drawLine(Offset(_leftPad, y), Offset(_leftPad + chartW, y), gridPaint);
+
+      // Y label
+      final tp = TextPainter(
+        text: TextSpan(text: yVal.toInt().toString(), style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(0, y - tp.height / 2));
+    }
+
+    // ── X axis labels ──────────────────────────────────────────────────────────
+    for (int i = 0; i < _kXLabels.length; i++) {
+      final tp = TextPainter(
+        text: TextSpan(text: _kXLabels[i], style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(
+        canvas,
+        Offset(xOf(i) - tp.width / 2, _topPad + chartH + 8),
+      );
+    }
+
+    // ── Series lines + dots ────────────────────────────────────────────────────
+    for (int s = 0; s < _kTrendSeries.length; s++) {
+      final data  = _kTrendSeries[s];
+      final color = _kTrendColors[s];
+
+      final linePaint = Paint()
+        ..color = color
+        ..strokeWidth = 2.2
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      final path = Path();
+      for (int i = 0; i < data.length; i++) {
+        final x = xOf(i);
+        final y = yOf(data[i]);
+        if (i == 0) {
+          path.moveTo(x, y);
+        } else {
+          path.lineTo(x, y);
+        }
+      }
+      canvas.drawPath(path, linePaint);
+
+      // Dots
+      for (int i = 0; i < data.length; i++) {
+        final x = xOf(i);
+        final y = yOf(data[i]);
+        const r = 3.0;
+
+        // White fill
+        canvas.drawCircle(
+          Offset(x, y),
+          r,
+          Paint()..color = Colors.white,
+        );
+        // Colored stroke
+        canvas.drawCircle(
+          Offset(x, y),
+          r,
+          Paint()
+            ..color = color
+            ..strokeWidth = 1.6
+            ..style = PaintingStyle.stroke,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TrendChartPainter old) =>
+      old.isDark != isDark || old.dividerColor != dividerColor;
+}
+
+// ─── Delta section ─────────────────────────────────────────────────────────────
+
+class _DeltaSection extends StatelessWidget {
+  const _DeltaSection({
+    required this.insights,
+    required this.isDark,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+  });
+
+  final InsightModel insights;
+  final bool isDark;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink2;
+  final Color ink3;
+
+  @override
+  Widget build(BuildContext context) {
+    final scores = insights.personalScores;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 10),
+          child: Text(
+            'BOYUT BAZINDA DEĞİŞİM',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: ink3,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        // First 4 in 2-column grid
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                children: [
+                  _DeltaCard(
+                    meta: _kDimensionMeta[0],
+                    score: scores[_kDimensionMeta[0].key] ?? 3.0,
+                    delta: _kFakeDeltas[0],
+                    surface: surface,
+                    border: border,
+                    ink: ink,
+                    ink2: ink2,
+                  ),
+                  const SizedBox(height: 8),
+                  _DeltaCard(
+                    meta: _kDimensionMeta[2],
+                    score: scores[_kDimensionMeta[2].key] ?? 3.0,
+                    delta: _kFakeDeltas[2],
+                    surface: surface,
+                    border: border,
+                    ink: ink,
+                    ink2: ink2,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                children: [
+                  _DeltaCard(
+                    meta: _kDimensionMeta[1],
+                    score: scores[_kDimensionMeta[1].key] ?? 3.0,
+                    delta: _kFakeDeltas[1],
+                    surface: surface,
+                    border: border,
+                    ink: ink,
+                    ink2: ink2,
+                  ),
+                  const SizedBox(height: 8),
+                  _DeltaCard(
+                    meta: _kDimensionMeta[3],
+                    score: scores[_kDimensionMeta[3].key] ?? 3.0,
+                    delta: _kFakeDeltas[3],
+                    surface: surface,
+                    border: border,
+                    ink: ink,
+                    ink2: ink2,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Last card spans full width
+        _DeltaCard(
+          meta: _kDimensionMeta[4],
+          score: scores[_kDimensionMeta[4].key] ?? 3.0,
+          delta: _kFakeDeltas[4],
+          surface: surface,
+          border: border,
+          ink: ink,
+          ink2: ink2,
+          fullWidth: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _DeltaCard extends StatelessWidget {
+  const _DeltaCard({
+    required this.meta,
+    required this.score,
+    required this.delta,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink2,
+    this.fullWidth = false,
+  });
+
+  final _DimensionMeta meta;
+  final double score;
+  final double delta;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink2;
+  final bool fullWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUp    = delta > 0;
+    final isFlat  = delta == 0;
+    final chipBg  = isFlat
+        ? (border)
+        : (isUp ? AppColors.sageWash : AppColors.amberWash);
+    final chipFg  = isFlat
+        ? ink2
+        : (isUp ? AppColors.sageDeep : AppColors.amberDeep);
+    final deltaStr = isFlat
+        ? '±0.0'
+        : (isUp ? '+${delta.toStringAsFixed(1)}' : delta.toStringAsFixed(1));
+
+    return Container(
+      width: fullWidth ? double.infinity : null,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Text(meta.emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  meta.label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: ink2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                score.toStringAsFixed(1),
+                style: GoogleFonts.bricolageGrotesque(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w600,
+                  color: ink,
+                  height: 1.0,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: chipBg,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  deltaStr,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: chipFg,
+                  ),
                 ),
               ),
             ],
@@ -412,37 +1031,130 @@ class _DimensionRow extends StatelessWidget {
   }
 }
 
-// ─── Pro upgrade banner ───────────────────────────────────────────────────────
+// ─── Highlights section ────────────────────────────────────────────────────────
 
-class _ProUpgradeBanner extends StatelessWidget {
+class _HighlightsSection extends StatelessWidget {
+  const _HighlightsSection({
+    required this.scores,
+    required this.strongestMeta,
+    required this.weakestMeta,
+    required this.ink,
+    required this.ink2,
+  });
+
+  final Map<String, double> scores;
+  final _DimensionMeta? strongestMeta;
+  final _DimensionMeta? weakestMeta;
+  final Color ink;
+  final Color ink2;
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        if (strongestMeta != null)
+          _HighlightCard(
+            badge: 'EN GÜÇLÜ ALANIN',
+            icon: Icons.auto_awesome_rounded,
+            iconColor: AppColors.sageDeep,
+            bgColor: AppColors.sageWash,
+            borderColor: AppColors.sage,
+            subject: '${strongestMeta!.emoji} ${strongestMeta!.label}',
+            description:
+                '${scores[strongestMeta!.key]?.toStringAsFixed(1) ?? '–'}/5 ile en yüksek skorun. '
+                'Bu alandaki güçlü performansın devam ediyor.',
+            ink: ink,
+            ink2: ink2,
+          ),
+        if (strongestMeta != null && weakestMeta != null)
+          const SizedBox(height: 10),
+        if (weakestMeta != null)
+          _HighlightCard(
+            badge: 'DİKKAT EDİLECEK ALAN',
+            icon: Icons.notifications_rounded,
+            iconColor: AppColors.amberDeep,
+            bgColor: AppColors.amberWash,
+            borderColor: AppColors.amber,
+            subject: '${weakestMeta!.emoji} ${weakestMeta!.label}',
+            description:
+                '${scores[weakestMeta!.key]?.toStringAsFixed(1) ?? '–'}/5 ile gelişime açık alan. '
+                'Bu boyuta biraz daha dikkat etmeni öneririz.',
+            ink: ink,
+            ink2: ink2,
+          ),
+      ],
+    );
+  }
+}
+
+class _HighlightCard extends StatelessWidget {
+  const _HighlightCard({
+    required this.badge,
+    required this.icon,
+    required this.iconColor,
+    required this.bgColor,
+    required this.borderColor,
+    required this.subject,
+    required this.description,
+    required this.ink,
+    required this.ink2,
+  });
+
+  final String badge;
+  final IconData icon;
+  final Color iconColor;
+  final Color bgColor;
+  final Color borderColor;
+  final String subject;
+  final String description;
+  final Color ink;
+  final Color ink2;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
-        color: scheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(10),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor.withValues(alpha: 0.4), width: 1),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.lock_outline_rounded,
-              color: scheme.onTertiaryContainer, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Şirket karşılaştırması için Pro plana geçin.',
-              style: TextStyle(
-                color: scheme.onTertiaryContainer,
-                fontSize: 13,
+          Row(
+            children: [
+              Icon(icon, color: iconColor, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                badge,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: iconColor,
+                  letterSpacing: 0.4,
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subject,
+            style: GoogleFonts.bricolageGrotesque(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: ink,
+              height: 1.2,
             ),
           ),
-          TextButton(
-            onPressed: () => GoRouter.of(context).go('/subscription'),
-            child: Text(
-              'Yükselt',
-              style: TextStyle(color: scheme.tertiary),
+          const SizedBox(height: 4),
+          Text(
+            description,
+            style: TextStyle(
+              fontSize: 12.5,
+              color: ink2,
+              height: 1.45,
             ),
           ),
         ],
@@ -451,54 +1163,74 @@ class _ProUpgradeBanner extends StatelessWidget {
   }
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
+// ─── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onCheckin});
+  const _EmptyState({
+    required this.isDark,
+    required this.ink,
+    required this.ink2,
+  });
 
-  final VoidCallback onCheckin;
+  final bool isDark;
+  final Color ink;
+  final Color ink2;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 100,
-              height: 100,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
-                color: scheme.primaryContainer,
+                color: AppColors.blueSoft,
                 shape: BoxShape.circle,
               ),
-              child: const Center(
-                child: Text('📊', style: TextStyle(fontSize: 48)),
+              child: const Icon(
+                Icons.insights_rounded,
+                color: AppColors.blue,
+                size: 36,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Henüz check-in yok',
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: ink,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'İlk haftalık check-in\'ini yaparak refah yolculuğuna başla. Sadece 60 saniye sürer.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: ink2,
+                height: 1.5,
               ),
             ),
             const SizedBox(height: 24),
-            Text(
-              'Henüz veri yok',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'İçgörülerinizi görmek için ilk check-in\'inizi yapın.',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: onCheckin,
-              icon: const Icon(Icons.add_circle_outline_rounded),
-              label: const Text('Check-in Yap'),
+            FilledButton(
+              onPressed: () => context.go('/checkin'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'İlk Check-in\'i Yap',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ),
@@ -507,76 +1239,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-class _InsightsSkeleton extends StatelessWidget {
-  const _InsightsSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          _SkeletonBox(height: 110, borderRadius: 16),
-          const SizedBox(height: 16),
-          _SkeletonBox(height: 340, borderRadius: 16),
-          const SizedBox(height: 16),
-          _SkeletonBox(height: 240, borderRadius: 16),
-        ],
-      ),
-    );
-  }
-}
-
-class _SkeletonBox extends StatefulWidget {
-  const _SkeletonBox({required this.height, required this.borderRadius});
-
-  final double height;
-  final double borderRadius;
-
-  @override
-  State<_SkeletonBox> createState() => _SkeletonBoxState();
-}
-
-class _SkeletonBoxState extends State<_SkeletonBox>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.4, end: 0.9).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, _) => Container(
-        height: widget.height,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest.withOpacity(_animation.value),
-          borderRadius: BorderRadius.circular(widget.borderRadius),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Error state ──────────────────────────────────────────────────────────────
+// ─── Error state ───────────────────────────────────────────────────────────────
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message});
@@ -589,25 +1252,587 @@ class _ErrorState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.error_outline_rounded,
-              size: 64,
-              color: Theme.of(context).colorScheme.error,
-            ),
+            const Icon(Icons.error_outline_rounded, color: AppColors.rose, size: 48),
             const SizedBox(height: 16),
-            const Text(
-              'İçgörüler yüklenemedi',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Text(
+              'Bir hata oluştu',
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AppColors.lightInk2),
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+// ─── Skeleton ──────────────────────────────────────────────────────────────────
+
+class _InsightsSkeleton extends StatelessWidget {
+  const _InsightsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final shimmer = isDark ? const Color(0xFF1B2233) : const Color(0xFFEFE9DE);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SkeletonBox(width: 160, height: 32, color: shimmer),
+          const SizedBox(height: 16),
+          _SkeletonBox(width: double.infinity, height: 44, color: shimmer, radius: 12),
+          const SizedBox(height: 12),
+          _SkeletonBox(width: double.infinity, height: 280, color: shimmer, radius: 20),
+          const SizedBox(height: 12),
+          _SkeletonBox(width: double.infinity, height: 220, color: shimmer, radius: 20),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonBox extends StatelessWidget {
+  const _SkeletonBox({
+    required this.width,
+    required this.height,
+    required this.color,
+    this.radius = 8,
+  });
+
+  final double width;
+  final double height;
+  final Color color;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
+// ─── Comparison section ────────────────────────────────────────────────────────
+
+const _kDeptRows = [
+  ('Mühendislik', 4.2),
+  ('Ürün',        4.0),
+  ('Satış',       3.5),
+  ('Tasarım',     4.3),
+  ('Müşteri Hiz.', 3.2),
+];
+
+// 12-week fake data: Şirket + Sektör
+const _k12wSirket = [3.4, 3.5, 3.6, 3.5, 3.7, 3.8, 3.7, 3.8, 3.9, 3.8, 3.9, 3.9];
+const _k12wSektor = [3.4, 3.4, 3.5, 3.5, 3.5, 3.6, 3.5, 3.6, 3.6, 3.6, 3.6, 3.6];
+
+class _ComparisonSection extends StatelessWidget {
+  const _ComparisonSection({
+    required this.isDark,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+    required this.bgAlt,
+  });
+
+  final bool isDark;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink2;
+  final Color ink3;
+  final Color bgAlt;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Participation hero card ──────────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'KATILIM ORANI',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: ink3,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '78%',
+                    style: GoogleFonts.bricolageGrotesque(
+                      fontSize: 44,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.blue,
+                      height: 1.0,
+                      letterSpacing: -2,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.sageWash,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        '↑ +12% geçen aya',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.sageDeep,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '289 / 372 çalışan · bu hafta',
+                style: TextStyle(fontSize: 13, color: ink2),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // ── Department heatmap ───────────────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'DEPARTMAN · BU HAFTA',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: ink3,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: bgAlt,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'n ≥ 10 görünür',
+                      style: TextStyle(fontSize: 10, color: ink3, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...List.generate(_kDeptRows.length, (i) {
+                final (name, score) = _kDeptRows[i];
+                final color = score >= 4.0
+                    ? AppColors.sage
+                    : score >= 3.5
+                        ? AppColors.blue
+                        : AppColors.amber;
+                final bgColor = score >= 4.0
+                    ? AppColors.sageWash
+                    : score >= 3.5
+                        ? AppColors.blueSoft
+                        : AppColors.amberWash;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: i < _kDeptRows.length - 1 ? 10 : 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: TextStyle(fontSize: 14, color: ink, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          score.toStringAsFixed(1),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                            fontFamily: 'JetBrainsMono',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'İK',
+                        style: TextStyle(fontSize: 14, color: ink, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    Text('—', style: TextStyle(fontSize: 14, color: ink3)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // ── 12-week trend chart ──────────────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '12 HAFTALIK TREND',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: ink3,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 2,
+                        color: AppColors.blue,
+                      ),
+                      const SizedBox(width: 4),
+                      Text('Şirket', style: TextStyle(fontSize: 11, color: ink3)),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 12,
+                        child: Row(
+                          children: List.generate(3, (i) => Expanded(
+                            child: Container(
+                              height: 2,
+                              margin: EdgeInsets.only(right: i < 2 ? 2 : 0),
+                              color: AppColors.amber,
+                            ),
+                          )),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text('Sektör', style: TextStyle(fontSize: 11, color: ink3)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 120,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _Comparison12wPainter(
+                    isDark: isDark,
+                    dividerColor: isDark ? AppColors.dividerDark : AppColors.dividerLight,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // ── Sector comparison card ───────────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.blueSoftDark : const Color(0xFFEBF2FB),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.blue.withValues(alpha: 0.25)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'ŞİRKET VS SEKTÖR ORTALAMASI',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.blueDeep,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Şirketin', style: TextStyle(fontSize: 12, color: ink2)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '3.9',
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.blue,
+                            height: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Sektör (Teknoloji)', style: TextStyle(fontSize: 12, color: ink2)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '3.6',
+                          style: GoogleFonts.bricolageGrotesque(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: ink2,
+                            height: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.sageWash,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      '+0.3',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.sageDeep,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Sektör ortalamasının üstündesin. Son 12 haftada en güçlü performansını gösterdin.',
+                style: TextStyle(fontSize: 13, color: ink2, height: 1.5),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'n = 8 · gizli',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: ink3,
+                  fontFamily: 'JetBrainsMono',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── 12-week comparison chart painter ─────────────────────────────────────────
+
+class _Comparison12wPainter extends CustomPainter {
+  const _Comparison12wPainter({
+    required this.isDark,
+    required this.dividerColor,
+  });
+
+  final bool isDark;
+  final Color dividerColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const leftPad  = 24.0;
+    const rightPad = 8.0;
+    const topPad   = 6.0;
+    const bottomPad = 20.0;
+    const minY = 2.0;
+    const maxY = 5.0;
+
+    final chartW = size.width  - leftPad - rightPad;
+    final chartH = size.height - topPad  - bottomPad;
+    final n = _k12wSirket.length;
+
+    double xOf(int i) => leftPad + i * chartW / (n - 1);
+    double yOf(double v) => topPad + (1 - (v - minY) / (maxY - minY)) * chartH;
+
+    final gridPaint = Paint()
+      ..color = dividerColor
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    final labelStyle = TextStyle(
+      color: isDark ? AppColors.darkInk3 : AppColors.lightInk3,
+      fontSize: 9,
+      fontWeight: FontWeight.w500,
+    );
+
+    for (final yVal in [3.0, 4.0]) {
+      final y = yOf(yVal);
+      canvas.drawLine(Offset(leftPad, y), Offset(leftPad + chartW, y), gridPaint);
+      final tp = TextPainter(
+        text: TextSpan(text: yVal.toInt().toString(), style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(0, y - tp.height / 2));
+    }
+
+    // X labels at week 1, 4, 8, 12
+    for (final (i, label) in [(0, 'H1'), (3, 'H4'), (7, 'H8'), (11, 'H12')]) {
+      final tp = TextPainter(
+        text: TextSpan(text: label, style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(xOf(i) - tp.width / 2, topPad + chartH + 6));
+    }
+
+    // Şirket line (solid blue)
+    final sirketPaint = Paint()
+      ..color = AppColors.blue
+      ..strokeWidth = 2.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final sirketPath = Path();
+    for (int i = 0; i < n; i++) {
+      final x = xOf(i);
+      final y = yOf(_k12wSirket[i]);
+      i == 0 ? sirketPath.moveTo(x, y) : sirketPath.lineTo(x, y);
+    }
+    canvas.drawPath(sirketPath, sirketPaint);
+
+    // Sektör line (dashed amber)
+    final sektorPaint = Paint()
+      ..color = AppColors.amber
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    const dashLen = 5.0;
+    const gapLen  = 3.0;
+    bool drawing = true;
+
+    final sektorPath = Path();
+    for (int i = 1; i < n; i++) {
+      final x0 = xOf(i - 1); final y0 = yOf(_k12wSektor[i - 1]);
+      final x1 = xOf(i);     final y1 = yOf(_k12wSektor[i]);
+      final dx = x1 - x0;    final dy = y1 - y0;
+      // Simple approximation: draw dash segments
+      double t = 0;
+      while (t < 1) {
+        if (drawing) {
+          final tEnd = (t + dashLen / (dx.abs().clamp(1, double.infinity))).clamp(0.0, 1.0);
+          sektorPath.moveTo(x0 + t * dx, y0 + t * dy);
+          sektorPath.lineTo(x0 + tEnd * dx, y0 + tEnd * dy);
+          t = tEnd;
+        } else {
+          t += gapLen / (dx.abs().clamp(1, double.infinity));
+        }
+        drawing = !drawing;
+      }
+    }
+    canvas.drawPath(sektorPath, sektorPaint);
+
+    // Dots at endpoints for Şirket
+    for (final i in [0, n - 1]) {
+      final x = xOf(i); final y = yOf(_k12wSirket[i]);
+      canvas.drawCircle(Offset(x, y), 3.5, Paint()..color = Colors.white);
+      canvas.drawCircle(Offset(x, y), 3.5,
+          Paint()..color = AppColors.blue..strokeWidth = 1.8..style = PaintingStyle.stroke);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Comparison12wPainter old) =>
+      old.isDark != isDark || old.dividerColor != dividerColor;
+}
+
+// ─── Dimension metadata value type ────────────────────────────────────────────
+
+class _DimensionMeta {
+  const _DimensionMeta({
+    required this.key,
+    required this.label,
+    required this.emoji,
+    required this.color,
+  });
+
+  final String key;
+  final String label;
+  final String emoji;
+  final Color color;
 }

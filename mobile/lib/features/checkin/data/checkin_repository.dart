@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../models/checkin_model.dart';
-import '../../../models/user_model.dart';
 
 class CheckinRepository {
   CheckinRepository({required FirebaseFirestore firestore})

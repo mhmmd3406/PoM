@@ -1,32 +1,22 @@
-# Node
 node_modules/
-package-lock.json
-*.tsbuildinfo
 
-# Build outputs
-dist/
-build/
-functions/lib/
+# Firebase secrets — injected via Codemagic secret (FCI_GOOGLE_SERVICES)
+mobile/android/app/google-services.json
 
-# Flutter
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-.pub-cache/
-.pub/
-build/
+# Flutter/Dart build artifacts
 mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+# Android local config
+mobile/android/local.properties
+mobile/android/key.properties
 
-# Env
-.env.local
-.env
+# Service account keys — NEVER commit these
+scripts/sa_key.json
+scripts/serviceAccountKey.json
+scripts/*.key.json
 
-# Firebase
-.firebase/
+# Build logs
+mobile/build_log.txt
