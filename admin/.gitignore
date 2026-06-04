@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Local env / editor
+*.local
+.vite/
