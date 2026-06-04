@@ -4,6 +4,7 @@
   "description": "PoM seed & admin scripts",
   "type": "commonjs",
   "dependencies": {
-    "firebase-admin": "^12.0.0"
+    "firebase-admin": "^12.0.0",
+    "ws": "^8.21.0"
   }
 }
