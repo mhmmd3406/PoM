@@ -33,19 +33,64 @@ class AuthState {
   }
 }
 
-// ─── Test user (debug bypass only) ───────────────────────────────────────────
+// ─── Debug users (debug bypass only) ─────────────────────────────────────────
 
-const _testUser = UserModel(
-  uid: 'test_user_001',
-  linkedinHash: 'debug_hash_000',
-  displayName: 'Test Kullanıcı',
-  role: 'pro',
-  kvkkAccepted: true,
-  kvkkVersion: '1.0',
-  creditBalance: 150,
-  companyId: 'garanti_bbva',
-  department: 'hq_it',
-);
+const _kDebugUsers = [
+  UserModel(
+    uid: 'debug_free',
+    linkedinHash: 'hash_free',
+    displayName: 'Ayşe Kaya',
+    email: 'ayse.kaya@pom.app',
+    role: 'free',
+    kvkkAccepted: true,
+    kvkkVersion: '1.0',
+    creditBalance: 0,
+    companyId: 'startup_co',
+    department: 'Pazarlama',
+  ),
+  UserModel(
+    uid: 'debug_pro',
+    linkedinHash: 'hash_pro',
+    displayName: 'Mehmet Demir',
+    email: 'mehmet.demir@pom.app',
+    role: 'pro',
+    kvkkAccepted: true,
+    kvkkVersion: '1.0',
+    creditBalance: 150,
+    companyId: 'garanti_bbva',
+    department: 'Ürün',
+  ),
+  UserModel(
+    uid: 'debug_enterprise',
+    linkedinHash: 'hash_enterprise',
+    displayName: 'Zeynep Arslan',
+    email: 'zeynep.arslan@pom.app',
+    role: 'enterprise',
+    kvkkAccepted: true,
+    kvkkVersion: '1.0',
+    creditBalance: 500,
+    companyId: 'turkcell',
+    department: 'İnsan Kaynakları',
+  ),
+  UserModel(
+    uid: 'debug_daas',
+    linkedinHash: 'hash_daas',
+    displayName: 'Can Öztürk',
+    email: 'can.ozturk@pom.app',
+    role: 'daas',
+    kvkkAccepted: true,
+    kvkkVersion: '1.0',
+    creditBalance: 1200,
+    companyId: 'akbank',
+    department: 'Teknoloji',
+  ),
+];
+
+// ignore: prefer_const_declarations
+final _testUser = _kDebugUsers[1]; // pro kullanıcı varsayılan
+
+/// Tüm debug kullanıcılarına dışarıdan erişim (ProfileScreen için).
+const kDebugUsers = _kDebugUsers;
 
 // ─── Auth State Notifier ──────────────────────────────────────────────────────
 
@@ -56,7 +101,7 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
   AuthState build() {
     // In debug builds, bypass LinkedIn login with a test user.
     if (kDebugMode && AppConstants.debugBypassAuth) {
-      return const AuthState(user: _testUser);
+      return AuthState(user: _testUser);
     }
 
     ref.listen(authStateProvider, (previous, next) {
@@ -143,20 +188,10 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
     _notifyListeners();
   }
 
-  // ignore: avoid_field_initializers_in_const_classes
-  void signInAsTestUser() {
-    state = AuthState(
-      user: const UserModel(
-        uid: 'test-uid-001',
-        linkedinHash: 'test-hash',
-        displayName: 'Test Kullanıcı',
-        email: 'test@pom.app',
-        role: 'pro',
-        kvkkAccepted: true,
-        kvkkVersion: '1.0',
-        creditBalance: 100,
-      ),
-    );
+  /// Debug-only: instantly switch to any test persona.
+  void switchDebugUser(UserModel user) {
+    assert(kDebugMode, 'switchDebugUser is only available in debug mode');
+    state = AuthState(user: user);
     _notifyListeners();
   }
 

@@ -9,55 +9,77 @@ import '../../features/benchmarking/presentation/benchmarking_screen.dart';
 import '../../features/checkin/presentation/checkin_flow_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/insights/presentation/insights_screen.dart';
+import '../../features/onboarding/presentation/onboarding_screen.dart';
+import '../../features/profile/presentation/profile_screen.dart';
+import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/subscription/presentation/subscription_screen.dart';
+import '../../features/surveys/presentation/survey_answer_screen.dart';
+import '../../features/surveys/presentation/surveys_screen.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
+import '../widgets/connection_error_widget.dart';
 
-// Route names
 class AppRoutes {
-  static const home = '/';
-  static const login = '/login';
-  static const kvkk = '/kvkk';
-  static const checkin = '/checkin';
-  static const insights = '/insights';
-  static const wallet = '/wallet';
+  static const home         = '/';
+  static const onboarding   = '/onboarding';
+  static const login        = '/login';
+  static const kvkk         = '/kvkk';
+  static const checkin      = '/checkin';
+  static const insights     = '/insights';
+  static const surveys      = '/surveys';
+  static const profile      = '/profile';
+  static const wallet       = '/wallet';
   static const subscription = '/subscription';
-  static const benchmarking = '/benchmarking';
+  static const benchmarking  = '/benchmarking';
+  static const reports       = '/reports';
+  static const surveyAnswer  = '/survey/:id/answer';
+  static const surveyLock    = '/survey/:id/lock';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = ref.watch(authStateNotifierProvider.notifier);
 
   return GoRouter(
-    initialLocation: AppRoutes.home,
+    initialLocation: AppRoutes.onboarding,
     refreshListenable: authNotifier,
     redirect: (BuildContext context, GoRouterState state) {
       final authState = ref.read(authStateNotifierProvider);
-      final isLoading = authState.isLoading;
-      if (isLoading) return null;
+      if (authState.isLoading) return null;
 
       final isAuthenticated = authState.user != null;
-      final isOnLogin = state.matchedLocation == AppRoutes.login;
-      final isOnKvkk = state.matchedLocation == AppRoutes.kvkk;
-
-      // Not authenticated → go to login
-      if (!isAuthenticated) {
-        return isOnLogin ? null : AppRoutes.login;
-      }
-
-      // Authenticated but KVKK not accepted → go to KVKK
       final kvkkAccepted = authState.user?.kvkkAccepted ?? false;
-      if (!kvkkAccepted && !isOnKvkk) {
-        return AppRoutes.kvkk;
+      final loc = state.matchedLocation;
+
+      // Fully authenticated users skip onboarding/login/kvkk → home
+      if (isAuthenticated && kvkkAccepted) {
+        const authScreens = [
+          AppRoutes.onboarding,
+          AppRoutes.login,
+          AppRoutes.kvkk,
+        ];
+        if (authScreens.contains(loc)) return AppRoutes.home;
+        return null;
       }
 
-      // Already on login/kvkk but authenticated and KVKK accepted → go home
-      if ((isOnLogin || isOnKvkk) && kvkkAccepted) {
-        return AppRoutes.home;
+      // Onboarding: allow unauthenticated users through
+      if (loc == AppRoutes.onboarding) return null;
+
+      // Not authenticated → login (unless already there)
+      if (!isAuthenticated) {
+        return loc == AppRoutes.login ? null : AppRoutes.login;
+      }
+
+      // Authenticated but KVKK not accepted → KVKK screen
+      if (!kvkkAccepted && loc != AppRoutes.kvkk) {
+        return AppRoutes.kvkk;
       }
 
       return null;
     },
     routes: [
+      GoRoute(
+        path: AppRoutes.onboarding,
+        builder: (context, state) => const OnboardingScreen(),
+      ),
       GoRoute(
         path: AppRoutes.home,
         builder: (context, state) => const HomeScreen(),
@@ -79,6 +101,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const InsightsScreen(),
       ),
       GoRoute(
+        path: AppRoutes.surveys,
+        builder: (context, state) => const SurveysScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.profile,
+        builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.wallet,
         builder: (context, state) => const WalletScreen(),
       ),
@@ -90,28 +120,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.benchmarking,
         builder: (context, state) => const BenchmarkingScreen(),
       ),
-    ],
-    errorBuilder: (context, state) => Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(
-              'Sayfa bulunamadı',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(state.error?.message ?? 'Bilinmeyen hata'),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => context.go(AppRoutes.home),
-              child: const Text('Ana Sayfaya Dön'),
-            ),
-          ],
+      GoRoute(
+        path: AppRoutes.reports,
+        builder: (context, state) => const ReportsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.surveyAnswer,
+        builder: (context, state) => SurveyAnswerScreen(
+          surveyId: state.pathParameters['id'] ?? '',
         ),
       ),
+      GoRoute(
+        path: AppRoutes.surveyLock,
+        builder: (context, state) => const SurveyMinNLockScreen(),
+      ),
+    ],
+    errorBuilder: (context, state) => ConnectionErrorWidget(
+      title: 'Sayfa bulunamadı',
+      message: state.error?.message ?? 'Bilinmeyen hata',
+      onRetry: () => context.go(AppRoutes.home),
     ),
   );
 });
