@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/pro_gate.dart';
 import '../../../models/insight_model.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/insights_provider.dart';
 import 'radar_chart_widget.dart';
 
@@ -62,6 +64,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   @override
   Widget build(BuildContext context) {
     final insightsAsync = ref.watch(insightsStreamProvider);
+    final isPro = ref.watch(currentUserProvider)?.isPro ?? false;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg      = isDark ? AppColors.darkBg      : AppColors.lightBg;
@@ -86,6 +89,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
               insights: insights,
               selectedView: _selectedView,
               onViewChanged: (v) => setState(() => _selectedView = v),
+              isPro: isPro,
               isDark: isDark,
               bg: bg,
               surface: surface,
@@ -143,6 +147,7 @@ class _InsightsContent extends StatelessWidget {
     required this.insights,
     required this.selectedView,
     required this.onViewChanged,
+    required this.isPro,
     required this.isDark,
     required this.bg,
     required this.surface,
@@ -156,6 +161,7 @@ class _InsightsContent extends StatelessWidget {
   final InsightModel insights;
   final String selectedView;
   final ValueChanged<String> onViewChanged;
+  final bool isPro;
   final bool isDark;
   final Color bg;
   final Color surface;
@@ -189,6 +195,10 @@ class _InsightsContent extends StatelessWidget {
             orElse: () => _kDimensionMeta.last)
         : null;
 
+    // Advanced views are Pro-only: free users see a blurred teaser + upsell.
+    final companyLocked = selectedView == 'company' && !isPro;
+    final comparisonLocked = selectedView == 'comparison' && !isPro;
+
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
@@ -215,6 +225,7 @@ class _InsightsContent extends StatelessWidget {
             child: _TogglePill(
               selected: selectedView,
               onChanged: onViewChanged,
+              isPro: isPro,
               isDark: isDark,
               bgAlt: bgAlt,
               surface: surface,
@@ -225,83 +236,127 @@ class _InsightsContent extends StatelessWidget {
         ),
 
         if (selectedView != 'comparison') ...[
-          // ── Radar card ──────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _RadarCard(
-                displayScore: selectedView == 'company'
-                    ? insights.companyAverage
-                    : insights.personalAverage,
-                personalList: personalList,
-                companyList: companyList,
-                isDark: isDark,
-                surface: surface,
-                border: border,
-                ink: ink,
-                ink3: ink3,
-              ),
-            ),
-          ),
-
-          // ── Trend lines card ────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: _TrendCard(
-                isDark: isDark,
-                surface: surface,
-                border: border,
-                ink: ink,
-                ink2: ink2,
-                ink3: ink3,
-              ),
-            ),
-          ),
-
-          // ── Delta cards ─────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: _DeltaSection(
-                insights: insights,
-                isDark: isDark,
-                surface: surface,
-                border: border,
-                ink: ink,
-                ink2: ink2,
-                ink3: ink3,
-              ),
-            ),
-          ),
-
-          // ── Highlights ──────────────────────────────────────────────────────
-          if (strongestMeta != null || weakestMeta != null)
+          if (companyLocked) ...[
+            // ── Locked 'Şirket' view: blurred radar+trend teaser + upsell ─────
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _HighlightsSection(
-                  scores: scores,
-                  strongestMeta: strongestMeta,
-                  weakestMeta: weakestMeta,
-                  ink: ink,
-                  ink2: ink2,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: ProGate(
+                  locked: true,
+                  title: 'Şirket görünümü Pro\'ya özel',
+                  message: 'Şirketinin boyut bazında nabzını ve haftalık '
+                      'trendini Pro ile gör.',
+                  child: Column(
+                    children: [
+                      _RadarCard(
+                        displayScore: insights.companyAverage,
+                        personalList: personalList,
+                        companyList: companyList,
+                        isDark: isDark,
+                        surface: surface,
+                        border: border,
+                        ink: ink,
+                        ink3: ink3,
+                      ),
+                      const SizedBox(height: 12),
+                      _TrendCard(
+                        isDark: isDark,
+                        surface: surface,
+                        border: border,
+                        ink: ink,
+                        ink2: ink2,
+                        ink3: ink3,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
+          ] else ...[
+            // ── Radar card ──────────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: _RadarCard(
+                  displayScore: selectedView == 'company'
+                      ? insights.companyAverage
+                      : insights.personalAverage,
+                  personalList: personalList,
+                  companyList: companyList,
+                  isDark: isDark,
+                  surface: surface,
+                  border: border,
+                  ink: ink,
+                  ink3: ink3,
+                ),
+              ),
+            ),
+
+            // ── Trend lines card ────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _TrendCard(
+                  isDark: isDark,
+                  surface: surface,
+                  border: border,
+                  ink: ink,
+                  ink2: ink2,
+                  ink3: ink3,
+                ),
+              ),
+            ),
+
+            // ── Delta cards ─────────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _DeltaSection(
+                  insights: insights,
+                  isDark: isDark,
+                  surface: surface,
+                  border: border,
+                  ink: ink,
+                  ink2: ink2,
+                  ink3: ink3,
+                ),
+              ),
+            ),
+
+            // ── Highlights ──────────────────────────────────────────────────────
+            if (strongestMeta != null || weakestMeta != null)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: _HighlightsSection(
+                    scores: scores,
+                    strongestMeta: strongestMeta,
+                    weakestMeta: weakestMeta,
+                    ink: ink,
+                    ink2: ink2,
+                  ),
+                ),
+              ),
+          ],
         ] else ...[
-          // ── Comparison content ──────────────────────────────────────────────
+          // ── Comparison content (Pro-only) ───────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _ComparisonSection(
-                isDark: isDark,
-                surface: surface,
-                border: border,
-                ink: ink,
-                ink2: ink2,
-                ink3: ink3,
-                bgAlt: bgAlt,
+              child: ProGate(
+                locked: comparisonLocked,
+                title: 'Karşılaştırma Pro\'ya özel',
+                message: 'Departman kırılımı ve sektör benchmark\'larını '
+                    'Pro ile aç.',
+                child: _ComparisonSection(
+                  isDark: isDark,
+                  surface: surface,
+                  border: border,
+                  ink: ink,
+                  ink2: ink2,
+                  ink3: ink3,
+                  bgAlt: bgAlt,
+                ),
               ),
             ),
           ),
@@ -319,6 +374,7 @@ class _TogglePill extends StatelessWidget {
   const _TogglePill({
     required this.selected,
     required this.onChanged,
+    required this.isPro,
     required this.isDark,
     required this.bgAlt,
     required this.surface,
@@ -328,6 +384,7 @@ class _TogglePill extends StatelessWidget {
 
   final String selected;
   final ValueChanged<String> onChanged;
+  final bool isPro;
   final bool isDark;
   final Color bgAlt;
   final Color surface;
@@ -356,6 +413,7 @@ class _TogglePill extends StatelessWidget {
           _PillSegment(
             label: 'Şirket',
             active: selected == 'company',
+            locked: !isPro,
             surface: surface,
             ink: ink,
             ink3: ink3,
@@ -364,6 +422,7 @@ class _TogglePill extends StatelessWidget {
           _PillSegment(
             label: 'Karşılaştırma',
             active: selected == 'comparison',
+            locked: !isPro,
             surface: surface,
             ink: ink,
             ink3: ink3,
@@ -383,6 +442,7 @@ class _PillSegment extends StatelessWidget {
     required this.ink,
     required this.ink3,
     required this.onTap,
+    this.locked = false,
   });
 
   final String label;
@@ -391,6 +451,7 @@ class _PillSegment extends StatelessWidget {
   final Color ink;
   final Color ink3;
   final VoidCallback onTap;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
@@ -413,13 +474,27 @@ class _PillSegment extends StatelessWidget {
                 : null,
           ),
           alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-              color: active ? ink : ink3,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (locked) ...[
+                Icon(Icons.lock_rounded,
+                    size: 11, color: active ? ink : ink3),
+                const SizedBox(width: 4),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    color: active ? ink : ink3,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
