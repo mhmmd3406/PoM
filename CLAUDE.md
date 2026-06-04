@@ -2,13 +2,11 @@
 
 ## Proje Yapısı
 ```
-PoM/                          ← dış git repo (github: mhmmd3406/PoM)
-├── mobile/                   ← Flutter uygulaması
+PoM/                          ← git repo (github: mhmmd3406/PoM)
+├── mobile/                   ← Flutter uygulaması (asıl çalışılan yer)
 ├── admin/                    ← React admin portal (Vite + TailwindCSS)
 ├── functions/                ← Firebase Cloud Functions (TypeScript, v2/gen2)
-├── pom/                      ← AYRI git repo (github: mhmmd3406/PoM, nested)
-│   ├── mobile/               ← Flutter kaynak (asıl çalışılan yer)
-│   └── scripts/              ← Node.js yönetim scriptleri
+├── scripts/                  ← Node.js yönetim scriptleri
 ├── firestore.rules
 ├── firestore.indexes.json
 └── firebase.json
@@ -58,28 +56,29 @@ cancelSubscription, deleteAccount, getThresholds, updateThresholds, daasWidgetAp
 Env vars henüz ayarlanmadı → Stripe/LinkedIn fonksiyonları runtime'da hata verir.
 Ayarlamak için: `firebase functions:config:set stripe.secret_key="sk_live_..."` vb.
 
-## Faydalı Scriptler (pom/scripts/)
+## Faydalı Scriptler (scripts/)
 ```
-node pom/scripts/list_auth_users.js          # Firebase Auth kullanıcılarını listele
-node pom/scripts/set_admin_rest.js EMAIL     # is_admin claim'i ata (REST, SA gerekmez)
-node pom/scripts/reset_all_portal_passwords.js  # Tüm portal şifrelerini resetle
-node pom/scripts/check_firestore.js          # Firestore koleksiyonlarını say
-node pom/scripts/enable_billing.js           # Billing hesabını projeye bağla
+node scripts/list_auth_users.js          # Firebase Auth kullanıcılarını listele
+node scripts/set_admin_rest.js EMAIL     # is_admin claim'i ata (REST, SA gerekmez)
+node scripts/reset_all_portal_passwords.js  # Tüm portal şifrelerini resetle
+node scripts/check_firestore.js          # Firestore koleksiyonlarını say
+node scripts/enable_billing.js           # Billing hesabını projeye bağla
 ```
+> SA-key gerektiren scriptler için `scripts/sa_key.json` / `serviceAccountKey.json` gitignore'lı (repoya girmez).
 
 ## Firestore Koleksiyonları
 `users`, `checkins`, `companies`, `surveys`, `survey_responses`,
 `wallets`, `subscriptions`, `transactions`, `platform_config`
 
 ## Tasarım Sistemi
-Renk token'ları: `pom/mobile/lib/core/theme/app_colors.dart`
+Renk token'ları: `mobile/lib/core/theme/app_colors.dart`
 Arka plan: `#F6F1E8` (warm cream, beyaz değil). Uyarı rengi: amber (kırmızı değil).
 
 ## Yapılacaklar (Kalan)
 - [ ] **main'i GitHub'da korumaya al** (Settings → Branches: PR + CI zorunlu)
 - [ ] **Mobil Pro-gating/upsell** ekle (insights'ta yok; `UserModel.isPro` tanımlı ama kullanılmıyor)
 - [ ] **pom-firestore'un benzersiz admin özelliklerini** TSX admin'e yeniden yaz: FeatureFlags, LegalTexts/KVKK, Announcements, Banks, Disputes + firestore/schema.md (silinen branch SHA `ce779a8`'den kurtarılabilir)
-- [ ] Temizlik: orphan nested `pom/` + `compassionate-antonelli` worktree klasörü + `stash@{0}`
+- [x] Temizlik: orphan `pom/` kaldırıldı — benzersiz işi `salvage/pom-gate-survey-wip` branch'ine + `../PoM-salvage/pom-gate-survey-wip.bundle`'a kurtarıldı (gate-survey WIP), scriptler→`scripts/`, `TECHNICAL_OVERVIEW.md`→`docs/`; `stash@{0}` arşivlenip (`../PoM-salvage/stash0-rules-admin-backup.patch`) drop edildi. ⚠️ `compassionate-antonelli` boş klasörü kilitli kaldı (bir process tutuyor; o oturum/terminal kapanınca `rmdir` ile silinir)
 - [ ] Stripe API key'leri: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
 - [ ] LinkedIn OAuth: `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`
 - [ ] Functions Node.js 20 → 22 yükseltme (20, 2026-10-30'da devre dışı)
