@@ -36,7 +36,13 @@ workflows:
         script: flutter test
         working_directory: mobile
       - name: Admin install & type-check build
-        script: npm ci && npm run build
+        # `npm ci` needs a committed package-lock.json; fall back to `npm install`
+        # for branches that predate it. `npm run build` = tsc -b + vite build (no
+        # secrets needed — VITE_* are runtime-only).
+        script: |
+          set -e
+          npm ci || npm install
+          npm run build
         working_directory: admin
 
   android-debug:
