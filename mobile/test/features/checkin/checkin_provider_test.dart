@@ -5,7 +5,6 @@ import 'package:pom_app/features/checkin/data/checkin_repository.dart';
 import 'package:pom_app/features/checkin/providers/checkin_provider.dart';
 import 'package:pom_app/models/checkin_model.dart';
 import 'package:pom_app/models/user_model.dart';
-import 'package:pom_app/core/providers/firebase_providers.dart';
 import 'package:pom_app/features/auth/providers/auth_provider.dart';
 
 class MockCheckinRepository extends Mock implements CheckinRepository {}

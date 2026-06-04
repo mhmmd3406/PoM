@@ -1,0 +1,46 @@
+name: CI
+
+# Native GitHub status check usable as a branch-protection gate on main.
+# CI is intentionally lean (no APK build / secrets): static analysis + unit tests
+# only, so it runs fast and needs no google-services.json (build is on Codemagic).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter:
+    name: Flutter analyze & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.24.3
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # --no-fatal-infos tolerates the existing info-level debt (withOpacity
+      # deprecations in benchmarking_screen/radar_chart, a couple of redundant
+      # imports). Errors and warnings still fail the build.
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        run: flutter test
