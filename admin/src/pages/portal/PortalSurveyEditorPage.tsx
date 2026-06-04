@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, addDoc, updateDoc, getDoc, collection, serverTimestamp,
 } from 'firebase/firestore'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../hooks/useAuth'
 import { db } from '../../firebase'
 import { SurveyQuestion, QuestionType } from './types'
@@ -166,19 +167,26 @@ export default function PortalSurveyEditorPage() {
   const { id } = useParams<{ id?: string }>()
   const isEdit = !!id
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const { authState } = useAuth()
   // super_admin has no companyId — their surveys are platform-wide ('__admin__')
   const companyId = authState.status === 'authenticated'
     ? (authState.companyId ?? '__admin__')
     : undefined
+  // super_admin uses /surveys, company_admin uses /portal/surveys
+  const surveysBase = authState.status === 'authenticated' && authState.role === 'super_admin'
+    ? '/surveys'
+    : '/portal/surveys'
 
   const [emoji, setEmoji]           = useState('📊')
   const [title, setTitle]           = useState('')
   const [desc, setDesc]             = useState('')
   const [deadline, setDeadline]     = useState('')
   const [minN, setMinN]             = useState(5)
+  const [isGate, setIsGate]         = useState(false)
+  const [isMandatory, setIsMandatory] = useState(false)
   const [questions, setQuestions]   = useState<SurveyQuestion[]>([
-    { id: crypto.randomUUID(), text: '', type: 'emoji5', hint: '' },
+    { id: crypto.randomUUID(), text: '', type: 'emoji5', hint: '', category: '', reverseScore: false, isEnps: false },
   ])
   const [focusedIdx, setFocusedIdx] = useState(0)
   const [loading, setLoading]       = useState(false)
@@ -190,12 +198,14 @@ export default function PortalSurveyEditorPage() {
     setFetching(true)
     getDoc(doc(db, 'surveys', id))
       .then((snap) => {
-        if (!snap.exists()) { navigate('/portal/surveys'); return }
+        if (!snap.exists()) { navigate(surveysBase); return }
         const d = snap.data()
         setEmoji(d.emoji ?? '📊')
         setTitle(d.title ?? '')
         setDesc(d.description ?? '')
         setMinN(d.minNThreshold ?? 5)
+        setIsGate(d.isGate ?? false)
+        setIsMandatory(d.isMandatory ?? false)
         if (d.deadline) {
           const date = d.deadline.toDate
             ? d.deadline.toDate()
@@ -207,7 +217,7 @@ export default function PortalSurveyEditorPage() {
           setFocusedIdx(0)
         }
       })
-      .catch(() => navigate('/portal/surveys'))
+      .catch(() => navigate(surveysBase))
       .finally(() => setFetching(false))
   }, [id, isEdit, navigate])
 
@@ -215,7 +225,7 @@ export default function PortalSurveyEditorPage() {
     const newIdx = questions.length
     setQuestions((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), text: '', type: 'emoji5', hint: '' },
+      { id: crypto.randomUUID(), text: '', type: 'emoji5', hint: '', category: '', reverseScore: false, isEnps: false },
     ])
     setFocusedIdx(newIdx)
   }
@@ -265,6 +275,8 @@ export default function PortalSurveyEditorPage() {
         status,
         deadline:       deadlineVal,
         minNThreshold:  minN,
+        isGate,
+        isMandatory:    isGate ? isMandatory : false,
         updated_at:     serverTimestamp(),
       }
 
@@ -279,7 +291,9 @@ export default function PortalSurveyEditorPage() {
         })
       }
 
-      navigate('/portal/surveys')
+      // Invalidate cache so the surveys list re-fetches fresh data
+      await qc.invalidateQueries({ queryKey: ['surveys'] })
+      navigate(surveysBase)
     } catch {
       setError('Kaydedilirken hata oluştu. Lütfen tekrar deneyin.')
     } finally {
@@ -302,7 +316,7 @@ export default function PortalSurveyEditorPage() {
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button
-          onClick={() => navigate('/portal/surveys')}
+          onClick={() => navigate(surveysBase)}
           className="text-gray-400 hover:text-gray-600 text-sm"
         >
           ← Geri
@@ -321,6 +335,7 @@ export default function PortalSurveyEditorPage() {
           {/* Basic info */}
           <div className="card space-y-4">
             <h2 className="font-semibold text-gray-900">Genel Bilgiler</h2>
+
 
             {/* Emoji */}
             <div>
@@ -365,6 +380,47 @@ export default function PortalSurveyEditorPage() {
                 rows={2}
                 className="input-field resize-none"
               />
+            </div>
+
+            {/* Gate survey toggles */}
+            <div className="space-y-3 pt-1">
+              <label className="flex items-center justify-between gap-4 cursor-pointer">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Giriş Anketi</p>
+                  <p className="text-xs text-gray-400">Kullanıcılar uygulamaya girişte bu anketi görür</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setIsGate(v => !v); if (isGate) setIsMandatory(false) }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    isGate ? 'bg-brand-500' : 'bg-gray-200'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    isGate ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </label>
+
+              {isGate && (
+                <label className="flex items-center justify-between gap-4 cursor-pointer pl-4 border-l-2 border-brand-200">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Zorunlu</p>
+                    <p className="text-xs text-gray-400">Atla butonu gizlenir; tamamlanmadan geçilemez</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMandatory(v => !v)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      isMandatory ? 'bg-amber-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      isMandatory ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </label>
+              )}
             </div>
 
             {/* Deadline + MinN */}
@@ -463,12 +519,34 @@ export default function PortalSurveyEditorPage() {
                   className="input-field"
                 />
 
+                {/* Category */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Kategori <span className="text-gray-400 font-normal">(opsiyonel — raporlama için)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={q.category ?? ''}
+                    onChange={(e) => updateQuestion(q.id, { category: e.target.value })}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="ör: Ücret ve Yan Haklar"
+                    className="input-field"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Yanıt Türü</label>
                     <select
                       value={q.type}
-                      onChange={(e) => updateQuestion(q.id, { type: e.target.value as QuestionType })}
+                      onChange={(e) => {
+                        const t = e.target.value as QuestionType
+                        updateQuestion(q.id, {
+                          type: t,
+                          reverseScore: (t === 'yesno' || t === 'trueFalse') ? (q.reverseScore ?? false) : false,
+                          isEnps: t === 'scale10' ? (q.isEnps ?? false) : false,
+                        })
+                      }}
                       onClick={(e) => e.stopPropagation()}
                       className="input-field"
                     >
@@ -491,6 +569,42 @@ export default function PortalSurveyEditorPage() {
                     />
                   </div>
                 </div>
+
+                {/* Reverse score flag — only for binary question types */}
+                {(q.type === 'yesno' || q.type === 'trueFalse') && (
+                  <label
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={q.reverseScore ?? false}
+                      onChange={(e) => updateQuestion(q.id, { reverseScore: e.target.checked })}
+                      className="rounded border-gray-300 text-brand-600"
+                    />
+                    <span className="text-xs text-gray-600">
+                      Ters puanlama — olumsuz soru (ör: "Mobbing yaşadınız mı?"); Evet=1, Hayır=5
+                    </span>
+                  </label>
+                )}
+
+                {/* eNPS flag — only for scale10 */}
+                {q.type === 'scale10' && (
+                  <label
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={q.isEnps ?? false}
+                      onChange={(e) => updateQuestion(q.id, { isEnps: e.target.checked })}
+                      className="rounded border-gray-300 text-brand-600"
+                    />
+                    <span className="text-xs text-gray-600">
+                      eNPS sorusu — tavsiye sorusu (0–6 Eleştiren, 7–8 Pasif, 9–10 Destekleyen)
+                    </span>
+                  </label>
+                )}
               </div>
             ))}
 

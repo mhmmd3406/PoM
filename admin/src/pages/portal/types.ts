@@ -8,6 +8,12 @@ export interface SurveyQuestion {
   text: string
   type: QuestionType
   hint: string
+  /** Groups this question into a named category for aggregate scoring. */
+  category?: string
+  /** Evet=1,Hayır=5 when true (negatively-framed question, e.g. "Mobbing yaşadınız mı?"). */
+  reverseScore?: boolean
+  /** Marks the designated eNPS question (must be scale10). */
+  isEnps?: boolean
 }
 
 export interface SurveyDoc {
@@ -21,6 +27,10 @@ export interface SurveyDoc {
   deadline?: Timestamp | null
   minNThreshold: number
   responseCount: number
+  /** When true this survey is shown as an entry gate on app launch. */
+  isGate?: boolean
+  /** When true users cannot skip the gate survey. */
+  isMandatory?: boolean
   created_at?: Timestamp
   updated_at?: Timestamp
 }
