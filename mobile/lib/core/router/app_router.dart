@@ -17,6 +17,7 @@ import '../../features/surveys/presentation/survey_answer_screen.dart';
 import '../../features/surveys/presentation/surveys_screen.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
 import '../widgets/connection_error_widget.dart';
+import '../widgets/pro_gate.dart';
 
 class AppRoutes {
   static const home         = '/';
@@ -118,11 +119,44 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.benchmarking,
-        builder: (context, state) => const BenchmarkingScreen(),
+        builder: (context, state) => Consumer(
+          builder: (context, ref, _) {
+            final isPro = ref.watch(currentUserProvider)?.isPro ?? false;
+            if (isPro) return const BenchmarkingScreen();
+            return ProGateScreen(
+              appBarTitle: 'Şirket Karşılaştırması',
+              heading: 'Şirket karşılaştırması Pro\'ya özel',
+              message: 'Şirketini sektör ortalaması ve diğer şirketlerle yan '
+                  'yana kıyaslamak için Pro\'ya geç.',
+              bullets: const [
+                'Şirketini sektör ortalamasıyla karşılaştır',
+                '6 şirkete kadar yan yana benchmark',
+                'Son 30 / 90 gün ve tüm zaman aralıkları',
+              ],
+              onBack: () => context.go(AppRoutes.home),
+            );
+          },
+        ),
       ),
       GoRoute(
         path: AppRoutes.reports,
-        builder: (context, state) => const ReportsScreen(),
+        builder: (context, state) => Consumer(
+          builder: (context, ref, _) {
+            final isPro = ref.watch(currentUserProvider)?.isPro ?? false;
+            if (isPro) return const ReportsScreen();
+            return ProGateScreen(
+              appBarTitle: 'Raporlar',
+              heading: 'Raporlar Pro\'ya özel',
+              message: 'Çalışan, İK ve yönetim raporlarına ve PDF dışa '
+                  'aktarmaya Pro ile eriş.',
+              bullets: const [
+                'Çalışan, İK ve yönetim raporları',
+                '12 haftalık tarihsel trendler',
+                'PDF dışa aktarma & rozetler',
+              ],
+            );
+          },
+        ),
       ),
       GoRoute(
         path: AppRoutes.surveyAnswer,
