@@ -9,6 +9,7 @@ const ADMIN_NAV = [
   { to: '/subscriptions', label: 'Abonelikler',     icon: CreditCardIcon },
   { to: '/departments',   label: 'Departmanlar',    icon: ChartBarIcon },
   { to: '/benchmark',     label: 'Benchmark',       icon: TrendingIcon },
+  { to: '/surveys',       label: 'Anketler',        icon: ClipboardIcon },
   { to: '/thresholds',    label: 'Eşikler',         icon: ShieldIcon },
   { to: '/admins',        label: 'Admin Yönetimi',  icon: KeyIcon },
 ]
