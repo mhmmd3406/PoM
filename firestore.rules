@@ -131,6 +131,28 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // ── platform yönetim koleksiyonları (admin panel) ─────────────────────────
+    // NOT: feature_flags ve legal_texts, platform_config/{doc} altında saklanır;
+    // o koleksiyon yukarıda zaten read: authenticated / write: isAdmin() ile korunur.
+
+    // banks → referans veri: app okur, yalnız admin yazar (companies/benchmarks ile aynı desen)
+    match /banks/{bankId} {
+      allow read:  if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // announcements → uygulama içi banner: app okur, yalnız admin yazar
+    match /announcements/{announcementId} {
+      allow read:  if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // disputes → hassas: yalnız admin okur/yazar.
+    // (Banka/B2B itiraz gönderimi sunucu-taraflı bir Cloud Function ile yapılır.)
+    match /disputes/{disputeId} {
+      allow read, write: if isAdmin();
+    }
+
     // ── admin catch-all ──────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if isAdmin();

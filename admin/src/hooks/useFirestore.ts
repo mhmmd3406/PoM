@@ -5,12 +5,14 @@ import {
   getDocs,
   getDoc,
   setDoc,
+  addDoc,
   updateDoc,
   deleteDoc,
   query,
   where,
   orderBy,
   limit,
+  serverTimestamp,
   QueryConstraint,
   DocumentData,
   WithFieldValue,
@@ -59,8 +61,31 @@ export function useDocument<T extends DocumentData>(
 export function useSetDocument<T extends DocumentData>(collectionPath: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: WithFieldValue<T> }) => {
-      await setDoc(doc(db, collectionPath, id), data)
+    mutationFn: async ({
+      id,
+      data,
+      merge = false,
+    }: {
+      id: string
+      data: WithFieldValue<T>
+      merge?: boolean
+    }) => {
+      await setDoc(doc(db, collectionPath, id), data as WithFieldValue<DocumentData>, { merge })
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [collectionPath] })
+    },
+  })
+}
+
+// ── Add document (auto-generated ID) ─────────────────────────────────────────
+
+export function useAddDocument<T extends DocumentData>(collectionPath: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: WithFieldValue<T>) => {
+      const ref = await addDoc(collection(db, collectionPath), data)
+      return ref.id
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [collectionPath] })
@@ -98,4 +123,4 @@ export function useDeleteDocument(collectionPath: string) {
 
 // ── Helpers re-exported for convenience ─────────────────────────────────────
 
-export { where, orderBy, limit, Timestamp }
+export { where, orderBy, limit, serverTimestamp, Timestamp }

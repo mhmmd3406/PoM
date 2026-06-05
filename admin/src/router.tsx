@@ -10,6 +10,11 @@ import SubscriptionsPage from './pages/SubscriptionsPage'
 import AdminsPage from './pages/AdminsPage'
 import DepartmentsPage from './pages/DepartmentsPage'
 import BenchmarkPage from './pages/BenchmarkPage'
+import FeatureFlagsPage from './pages/FeatureFlagsPage'
+import LegalTextsPage from './pages/LegalTextsPage'
+import AnnouncementsPage from './pages/AnnouncementsPage'
+import BanksPage from './pages/BanksPage'
+import DisputesPage from './pages/DisputesPage'
 import PortalDashboardPage from './pages/portal/PortalDashboardPage'
 import PortalSurveysPage from './pages/portal/PortalSurveysPage'
 import PortalSurveyEditorPage from './pages/portal/PortalSurveyEditorPage'
@@ -36,6 +41,11 @@ export const router = createBrowserRouter([
       { path: '/subscriptions',           element: <SubscriptionsPage /> },
       { path: '/departments',             element: <DepartmentsPage /> },
       { path: '/benchmark',               element: <BenchmarkPage /> },
+      { path: '/banks',                   element: <BanksPage /> },
+      { path: '/disputes',                element: <DisputesPage /> },
+      { path: '/announcements',           element: <AnnouncementsPage /> },
+      { path: '/feature-flags',           element: <FeatureFlagsPage /> },
+      { path: '/legal-texts',             element: <LegalTextsPage /> },
       { path: '/admins',                  element: <AdminsPage /> },
       { path: '/surveys',                 element: <PortalSurveysPage /> },
       { path: '/surveys/new',             element: <PortalSurveyEditorPage /> },
