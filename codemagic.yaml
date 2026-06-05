@@ -1,4 +1,50 @@
 workflows:
+  # ── PR gate (replaces the billing-locked GitHub Actions CI) ──────────────────
+  # Lean checks only — no secrets / google-services.json needed. Runs on every PR
+  # targeting main so verification happens on Codemagic's quota while GitHub
+  # Actions is billing-locked. Codemagic posts the build status back to the PR
+  # (enable "Build on pull request" + status updates in the Codemagic app once).
+  pr-checks:
+    name: PoM PR Checks (analyze, test, admin build)
+    max_build_duration: 30
+    environment:
+      flutter: stable
+      java: 17
+      node: 20
+    triggering:
+      events:
+        - pull_request
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: false
+      cancel_previous_builds: true
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+        - mobile/.dart_tool
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+        working_directory: mobile
+      - name: Flutter analyze
+        # --no-fatal-infos mirrors the old GitHub Actions gate (tolerates existing
+        # info-level debt; errors and warnings still fail).
+        script: flutter analyze --no-fatal-infos
+        working_directory: mobile
+      - name: Flutter test
+        script: flutter test
+        working_directory: mobile
+      - name: Admin install & type-check build
+        # `npm ci` needs a committed package-lock.json; fall back to `npm install`
+        # for branches that predate it. `npm run build` = tsc -b + vite build (no
+        # secrets needed — VITE_* are runtime-only).
+        script: |
+          set -e
+          npm ci || npm install
+          npm run build
+        working_directory: admin
+
   android-debug:
     name: PoM Android Debug APK
     max_build_duration: 30
