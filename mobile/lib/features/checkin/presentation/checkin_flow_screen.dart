@@ -47,6 +47,9 @@ class _CheckinFlowScreenState extends ConsumerState<CheckinFlowScreen> {
     final state = ref.read(checkinFlowProvider);
 
     if (!state.isCurrentStepAnswered) return;
+    // Guard against double submission: rapid taps on the final emoji schedule
+    // multiple delayed onNext calls, and submit() must run at most once.
+    if (state.isSubmitting || state.isComplete) return;
 
     if (state.currentStep < CheckinFlowState.totalSteps - 1) {
       notifier.nextStep();
@@ -850,12 +853,12 @@ class _CheckinFlow extends ConsumerWidget {
                   stepData: stepData,
                   selectedValue: state.valueForStep(index),
                   onSelect: (val) {
-                    final currentStep = state.currentStep;
                     ref.read(checkinFlowProvider.notifier).selectAnswer(val);
-                    if (currentStep < CheckinFlowState.totalSteps - 1) {
-                      Future.delayed(
-                          const Duration(milliseconds: 380), onNext);
-                    }
+                    // Auto-advance after a short beat. On the final step this
+                    // runs through onNext → _handleNext → submit(), which is the
+                    // only thing that completes the check-in (fixes F1: the last
+                    // step previously had no trigger and froze on "Kaydediliyor…").
+                    Future.delayed(const Duration(milliseconds: 380), onNext);
                   },
                 ),
               );
