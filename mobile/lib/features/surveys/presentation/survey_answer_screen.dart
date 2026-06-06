@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../data/survey_model.dart';
 import '../providers/surveys_provider.dart';
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
@@ -50,13 +49,13 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
         return;
       }
 
-      if (user != null) {
-        final hash = hashUserId(user.uid);
-        final responded = await repo.hasResponded(widget.surveyId, hash);
-        if (responded) {
-          setState(() => _loadState = _LoadState.alreadyAnswered);
-          return;
-        }
+      // "Already answered" is tracked on the user's own document
+      // (users/{uid}.answeredSurveyIds), loaded at sign-in — the app no longer
+      // reads survey_responses (firestore.rules restrict that to admins /
+      // company members, which caused the F5 PERMISSION_DENIED).
+      if (user != null && user.answeredSurveyIds.contains(widget.surveyId)) {
+        setState(() => _loadState = _LoadState.alreadyAnswered);
+        return;
       }
 
       setState(() {
@@ -95,8 +94,20 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
         surveyId: survey.id,
         companyId: survey.companyId,
         userIdHash: hash,
+        uid: user?.uid,
         answers: answersMap,
       );
+
+      // Reflect the answer in the in-memory user model immediately so the
+      // survey lists + the already-answered guard update without a re-read
+      // (currentUserProvider is loaded once at sign-in, not streamed).
+      if (user != null && !user.answeredSurveyIds.contains(survey.id)) {
+        ref.read(authStateNotifierProvider.notifier).refreshUser(
+              user.copyWith(
+                answeredSurveyIds: [...user.answeredSurveyIds, survey.id],
+              ),
+            );
+      }
 
       setState(() => _loadState = _LoadState.done);
     } catch (_) {
