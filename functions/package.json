@@ -3,6 +3,7 @@
   "description": "PoM Cloud Functions",
   "scripts": {
     "build": "tsc",
+    "test": "tsc && node --test test/thresholds.test.cjs",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
