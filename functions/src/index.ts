@@ -929,6 +929,19 @@ export const setAdminClaim = onCall(
       role: "admin",
     });
 
+    // Also record the admin in the `admins` collection so the admin portal can
+    // list current admins — the Auth custom claim alone is not queryable from
+    // the client (this was the F-ADM6 "empty admin list" bug). firestore.rules
+    // already recognise admins/{uid} as an admin source.
+    await db.collection("admins").doc(targetUid).set(
+      {
+        email: targetUser.email ?? null,
+        displayName: targetUser.displayName ?? null,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
     logger.info("Admin claim set", {
       by: request.auth.uid,
       for: targetUid,
