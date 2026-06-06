@@ -17,6 +17,7 @@ class UserModel {
     this.email,
     this.createdAt,
     this.lastCheckinAt,
+    this.answeredSurveyIds = const [],
   });
 
   final String uid;
@@ -36,6 +37,11 @@ class UserModel {
   final String? email;
   final DateTime? createdAt;
   final DateTime? lastCheckinAt;
+
+  /// Survey IDs this user has already answered. Tracked on the user document
+  /// (owner-readable) so the app never needs to read `survey_responses`, which
+  /// firestore.rules restrict to admins / company members.
+  final List<String> answeredSurveyIds;
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -61,6 +67,11 @@ class UserModel {
       lastCheckinAt: data['lastCheckinAt'] != null
           ? (data['lastCheckinAt'] as Timestamp).toDate()
           : null,
+      answeredSurveyIds:
+          (data['answeredSurveyIds'] as List<dynamic>?)
+                  ?.map((e) => e as String)
+                  .toList() ??
+              const [],
     );
   }
 
@@ -101,6 +112,7 @@ class UserModel {
     String? email,
     DateTime? createdAt,
     DateTime? lastCheckinAt,
+    List<String>? answeredSurveyIds,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -118,6 +130,7 @@ class UserModel {
       email: email ?? this.email,
       createdAt: createdAt ?? this.createdAt,
       lastCheckinAt: lastCheckinAt ?? this.lastCheckinAt,
+      answeredSurveyIds: answeredSurveyIds ?? this.answeredSurveyIds,
     );
   }
 

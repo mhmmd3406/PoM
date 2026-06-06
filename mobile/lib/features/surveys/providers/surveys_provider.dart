@@ -16,21 +16,21 @@ final _eligibleSurveysProvider = StreamProvider<List<SurveyModel>>((ref) {
       .watchEligibleSurveys(user.companyId);
 });
 
-// Set of surveyIds the current user has already responded to.
-final myResponseSurveyIdsProvider = StreamProvider<Set<String>>((ref) {
+// Set of surveyIds the current user has already answered. Sourced from the
+// user document's answeredSurveyIds (loaded at sign-in, refreshed locally after
+// each submit) — NOT from a survey_responses query, which firestore.rules
+// restrict to admins / company members and which caused PERMISSION_DENIED for
+// platform (__admin__) surveys.
+final myResponseSurveyIdsProvider = Provider<Set<String>>((ref) {
   final user = ref.watch(currentUserProvider);
-  if (user == null) return Stream.value({});
-  return ref
-      .watch(surveysRepositoryProvider)
-      .watchMyResponseSurveyIds(hashUserId(user.uid));
+  return user?.answeredSurveyIds.toSet() ?? <String>{};
 });
 
 // Active surveys the user hasn't answered yet.
 final pendingSurveysProvider = Provider<AsyncValue<List<SurveyModel>>>((ref) {
   final surveys = ref.watch(_eligibleSurveysProvider);
-  final responseIds = ref.watch(myResponseSurveyIdsProvider);
+  final answered = ref.watch(myResponseSurveyIdsProvider);
   return surveys.whenData((list) {
-    final answered = responseIds.valueOrNull ?? {};
     return list
         .where((s) =>
             s.status == SurveyStatus.active && !answered.contains(s.id))
@@ -40,12 +40,11 @@ final pendingSurveysProvider = Provider<AsyncValue<List<SurveyModel>>>((ref) {
   });
 });
 
-// Surveys the current user has already responded to.
+// Surveys the current user has already answered.
 final completedSurveysProvider = Provider<AsyncValue<List<SurveyModel>>>((ref) {
   final surveys = ref.watch(_eligibleSurveysProvider);
-  final responseIds = ref.watch(myResponseSurveyIdsProvider);
+  final answered = ref.watch(myResponseSurveyIdsProvider);
   return surveys.whenData((list) {
-    final answered = responseIds.valueOrNull ?? {};
     return list
         .where((s) => answered.contains(s.id))
         .toList()
