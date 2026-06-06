@@ -206,14 +206,70 @@ class _InsightsContent extends StatelessWidget {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-            child: Text(
-              'İçgörüler',
-              style: GoogleFonts.bricolageGrotesque(
-                fontSize: 26,
-                fontWeight: FontWeight.w600,
-                color: ink,
-                letterSpacing: -0.5,
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'İçgörüler',
+                    style: GoogleFonts.bricolageGrotesque(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w600,
+                      color: ink,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+                // F4: entry point to the Pro 6-company benchmark page. Previously
+                // /benchmarking existed but was unreachable from the UI. The route
+                // itself shows a Pro upsell for non-Pro users, so this is safe for
+                // everyone.
+                GestureDetector(
+                  onTap: () => context.push('/benchmarking'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.bar_chart_rounded,
+                            size: 16, color: AppColors.blue),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Karşılaştır',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: ink),
+                        ),
+                        if (!isPro) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.amber.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: const Text(
+                              'PRO',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.amberDeep,
+                                  letterSpacing: 0.4),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
