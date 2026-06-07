@@ -198,10 +198,10 @@ export const linkedinAuth = onCall(
 
     const linkedinHash = hashLinkedinId(profile.id, cfg.hmacSecret);
 
-    // Check for existing user by linkedin_hash
+    // Check for existing user by linkedinHash (camelCase, single users schema).
     const usersSnap = await db
       .collection("users")
-      .where("linkedin_hash", "==", linkedinHash)
+      .where("linkedinHash", "==", linkedinHash)
       .limit(1)
       .get();
 
@@ -224,22 +224,23 @@ export const linkedinAuth = onCall(
       const now = admin.firestore.FieldValue.serverTimestamp();
       const batch = db.batch();
 
-      // User document
+      // User document — single canonical camelCase schema (read by both the
+      // mobile UserModel and the admin portal; no snake_case duplicates).
       batch.set(db.collection("users").doc(uid), {
         uid,
-        linkedin_hash: linkedinHash,
+        linkedinHash,
         displayName,
         firstName: profile.localizedFirstName,
         lastName: profile.localizedLastName,
-        avatar: avatarUrl,
+        avatarUrl: avatarUrl,
         email: email,
         role: "free",
         companyId: null,
         department: null,
-        kvkk_accepted: false,
-        kvkk_version: null,
-        created_at: now,
-        updated_at: now,
+        kvkkAccepted: false,
+        kvkkVersion: null,
+        createdAt: now,
+        updatedAt: now,
         deleted: false,
       });
 
@@ -656,13 +657,13 @@ export const deleteAccount = onCall(async (request: CallableRequest<unknown>) =>
     displayName: null,
     firstName: null,
     lastName: null,
-    avatar: null,
+    avatarUrl: null,
     email: null,
-    linkedin_hash: `deleted_${timestamp}`,
+    linkedinHash: `deleted_${timestamp}`,
     userIdHash: deletedHash,
     deleted: true,
-    deleted_at: admin.firestore.FieldValue.serverTimestamp(),
-    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   // Revoke tokens then delete the Auth user

@@ -42,11 +42,9 @@ class AuthRepository {
   /// Exchanges the authorization code for a Firebase custom token via the
   /// `linkedinAuth` Cloud Function, then signs in to Firebase.
   ///
-  /// Contract with the function: it returns `customToken` (required) plus
-  /// optional, null-safe profile fields (`linkedinHash`, `displayName`,
-  /// `avatarUrl`, `email`). The hash is computed server-side with a single
-  /// secret — the client no longer re-hashes (that produced a hash that never
-  /// matched the backend's dedup key).
+  /// The Cloud Function is the SINGLE writer of the user document (one canonical
+  /// camelCase schema, also read by the admin portal). After sign-in we simply
+  /// read that document back — no client-side upsert or hashing.
   Future<UserModel> signInWithLinkedInCode(String authorizationCode) async {
     final callable = _functions.httpsCallable('linkedinAuth');
     final result = await callable.call<Map<String, dynamic>>({
@@ -54,60 +52,15 @@ class AuthRepository {
       'redirectUri': AppConstants.linkedInRedirectUri,
     });
 
-    final data = result.data;
-    final customToken = data['customToken'] as String;
-    // All profile fields are optional — read null-safe so a partial payload
-    // (e.g. LinkedIn email scope not granted) never crashes sign-in.
-    final linkedinHash = data['linkedinHash'] as String? ?? '';
-    // Pseudonymous, server-derived id used to read this user's anonymous
-    // check-ins / insights. The function also stamps it on the user doc.
-    final userIdHash = data['userIdHash'] as String? ?? '';
-    final displayName = data['displayName'] as String?;
-    final avatarUrl = data['avatarUrl'] as String?;
-    final email = data['email'] as String?;
-
+    final customToken = result.data['customToken'] as String;
     final credential = await _auth.signInWithCustomToken(customToken);
     final uid = credential.user!.uid;
 
-    // The function already created the Auth user, wallet, subscription and a
-    // server-side user doc (snake_case fields the admin portal reads). Here we
-    // only MERGE the camelCase fields the mobile UserModel reads — using
-    // merge:true so we never wipe the server's fields (e.g. `linkedin_hash`
-    // used for server-side dedup, `kvkk_accepted` read by the admin portal).
-    // NOTE: the snake_case↔camelCase split in `users` is intentional tech debt
-    // tracked for the Sprint 2 naming-unification PR; once unified the function
-    // can be the sole writer and this client merge can be dropped entirely.
-    final userRef =
-        _firestore.collection(AppConstants.usersCollection).doc(uid);
-    final snapshot = await userRef.get();
-    UserModel user;
-
-    if (!snapshot.exists) {
-      user = UserModel(
-        uid: uid,
-        linkedinHash: linkedinHash,
-        userIdHash: userIdHash,
-        displayName: displayName,
-        avatarUrl: avatarUrl,
-        email: email,
-        role: AppConstants.planFree,
-        kvkkAccepted: false,
-        creditBalance: 0,
-        createdAt: DateTime.now(),
-      );
-      await userRef.set(user.toFirestore(), SetOptions(merge: true));
-    } else {
-      user = UserModel.fromFirestore(snapshot);
-      await userRef.set({
-        'linkedinHash': linkedinHash,
-        if (userIdHash.isNotEmpty) 'userIdHash': userIdHash,
-        if (displayName != null) 'displayName': displayName,
-        if (avatarUrl != null) 'avatarUrl': avatarUrl,
-        if (email != null) 'email': email,
-      }, SetOptions(merge: true));
-    }
-
-    return user;
+    // The function committed the user/wallet/subscription docs before returning,
+    // so this read sees them. Fall back to a minimal model only if the document
+    // is unexpectedly missing.
+    final user = await getUser(uid);
+    return user ?? UserModel(uid: uid, linkedinHash: '');
   }
 
   // ─── KVKK ───────────────────────────────────────────────────────────────────
