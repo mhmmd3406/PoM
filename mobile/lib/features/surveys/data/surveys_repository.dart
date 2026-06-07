@@ -26,37 +26,22 @@ class SurveysRepository {
         .map((snap) => snap.docs.map(SurveyModel.fromFirestore).toList());
   }
 
-  // Survey IDs that the given user (by hash) has already responded to.
-  Stream<Set<String>> watchMyResponseSurveyIds(String userIdHash) {
-    return _db
-        .collection('survey_responses')
-        .where('userIdHash', isEqualTo: userIdHash)
-        .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => d['surveyId'] as String).toSet());
-  }
-
   Future<SurveyModel?> getSurvey(String surveyId) async {
     final doc = await _db.collection('surveys').doc(surveyId).get();
     if (!doc.exists) return null;
     return SurveyModel.fromFirestore(doc);
   }
 
-  // Returns true if this user already has a response for the given survey.
-  Future<bool> hasResponded(String surveyId, String userIdHash) async {
-    final snap = await _db
-        .collection('survey_responses')
-        .where('surveyId', isEqualTo: surveyId)
-        .where('userIdHash', isEqualTo: userIdHash)
-        .limit(1)
-        .get();
-    return snap.docs.isNotEmpty;
-  }
-
+  /// Writes a pseudonymous survey response and records the survey as answered
+  /// on the user's own document. The response doc stays keyed by [userIdHash]
+  /// (no PII); only the owner-readable user doc learns which surveys were
+  /// answered, so the app never needs to read `survey_responses` (which
+  /// firestore.rules restrict to admins / company members).
   Future<void> submitResponse({
     required String surveyId,
     required String companyId,
     required String userIdHash,
+    required String? uid,
     required Map<String, dynamic> answers,
   }) async {
     final batch = _db.batch();
@@ -74,6 +59,18 @@ class SurveysRepository {
     batch.update(_db.collection('surveys').doc(surveyId), {
       'responseCount': FieldValue.increment(1),
     });
+
+    // Record the survey as answered on the user's own doc (owner-writable) —
+    // the app's source of truth for "already answered".
+    if (uid != null) {
+      batch.set(
+        _db.collection('users').doc(uid),
+        {
+          'answeredSurveyIds': FieldValue.arrayUnion([surveyId]),
+        },
+        SetOptions(merge: true),
+      );
+    }
 
     await batch.commit();
   }

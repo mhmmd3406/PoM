@@ -9,6 +9,7 @@ import { onCall, onRequest, CallableRequest, HttpsError } from "firebase-functio
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
+import { applyThresholdFloors, sanitizeThresholdInput } from "./thresholds";
 import axios from "axios";
 import * as crypto from "crypto";
 import Stripe from "stripe";
@@ -63,15 +64,6 @@ function linkedinConfig() {
 /** Compute HMAC-SHA256 of LinkedIn user ID */
 function hashLinkedinId(linkedinId: string, secret: string): string {
   return crypto.createHmac("sha256", secret).update(linkedinId).digest("hex");
-}
-
-/** Safety-floor applied thresholds */
-function applyThresholdFloors(raw: Record<string, number>): Record<string, number> {
-  return {
-    ...raw,
-    company_min_n: Math.max(raw.company_min_n ?? 15, 7),
-    department_min_n: Math.max(raw.department_min_n ?? 10, 5),
-  };
 }
 
 /** Simple OLS slope: returns slope of y = a + b*x over integer x = 0..n-1 */
@@ -733,9 +725,11 @@ export const getThresholds = onCall(async (request: CallableRequest<unknown>) =>
   const raw = (await cachedRead("platform_config/thresholds", async () => {
     const doc = await db.collection("platform_config").doc("thresholds").get();
     return doc.exists ? doc.data() : {};
-  })) as Record<string, number>;
+  })) as Record<string, unknown>;
 
-  return applyThresholdFloors(raw);
+  // Expose only numeric thresholds — drop metadata (e.g. _updated_at) so the
+  // payload stays a clean Record<string, number>.
+  return applyThresholdFloors(sanitizeThresholdInput(raw));
 });
 
 // ---------------------------------------------------------------------------
@@ -743,17 +737,23 @@ export const getThresholds = onCall(async (request: CallableRequest<unknown>) =>
 // ---------------------------------------------------------------------------
 
 export const updateThresholds = onCall(
-  async (request: CallableRequest<Record<string, number>>) => {
+  async (request: CallableRequest<Record<string, unknown>>) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required");
     }
-    if (!request.auth.token.is_admin) {
+    if (request.auth.token.is_admin !== true) {
       throw new HttpsError("permission-denied", "Admin access required");
     }
 
-    const safe = applyThresholdFloors(request.data);
+    // Drop non-numeric fields before applying floors so undefined / NaN /
+    // strings can never reach Firestore (which would fail the write with an
+    // opaque "internal" error — the F-ADM5 symptom).
+    const safe = applyThresholdFloors(sanitizeThresholdInput(request.data));
 
-    await db.collection("platform_config").doc("thresholds").set(safe, { merge: true });
+    await db.collection("platform_config").doc("thresholds").set(
+      { ...safe, _updated_at: admin.firestore.FieldValue.serverTimestamp() },
+      { merge: true }
+    );
 
     // Invalidate cache so the next read picks up new values
     cache.delete("platform_config/thresholds");
