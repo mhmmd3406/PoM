@@ -231,7 +231,7 @@ export default function SubscriptionsPage() {
               <XAxis dataKey="plan" tick={{ fontSize: 12, fill: '#9ca3af' }} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                 {stats.planChartData.map((entry, index) => (
                   <Cell key={index} fill={PLAN_COLORS[entry.plan] ?? '#94a3b8'} />
                 ))}
