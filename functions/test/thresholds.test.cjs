@@ -7,8 +7,8 @@ const {
 
 test("applyThresholdFloors enforces the privacy safety floors", () => {
   const out = applyThresholdFloors({ company_min_n: 3, department_min_n: 2 });
-  assert.equal(out.company_min_n, 7);
-  assert.equal(out.department_min_n, 5);
+  assert.equal(out.company_min_n, 15);
+  assert.equal(out.department_min_n, 10);
 });
 
 test("applyThresholdFloors keeps above-floor values and defaults missing", () => {
@@ -45,8 +45,8 @@ test("update pipeline drops junk/metadata and protects the floor", () => {
       note: "x", // string → dropped
     })
   );
-  assert.equal(result.company_min_n, 7);
-  assert.equal(result.department_min_n, 5);
+  assert.equal(result.company_min_n, 15);
+  assert.equal(result.department_min_n, 10);
   assert.equal(result._updated_at, undefined);
   assert.equal(result.note, undefined);
 });
