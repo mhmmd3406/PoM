@@ -32,6 +32,12 @@ class AppConstants {
   // KVKK
   static const String currentKvkkVersion = '1.0';
 
+  // Legal & support links (profile → Hesap & Gizlilik / PoM Hakkında).
+  // Point these at the published legal pages before launch.
+  static const String kvkkUrl = 'https://pom.app/kvkk';
+  static const String privacyUrl = 'https://pom.app/gizlilik';
+  static const String supportEmail = 'destek@pom.app';
+
   // Subscription plans
   static const String planFree = 'free';
   static const String planPro = 'pro';
