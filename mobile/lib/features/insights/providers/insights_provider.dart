@@ -41,5 +41,6 @@ final insightsStreamProvider = StreamProvider.autoDispose<InsightModel?>((ref) {
   if (user == null) return Stream.empty();
 
   final repo = ref.watch(insightsRepositoryProvider);
-  return repo.watchInsights(user.uid);
+  // Insights are keyed by the pseudonymous userIdHash (no raw uid at rest).
+  return repo.watchInsights(user.userIdHash);
 });

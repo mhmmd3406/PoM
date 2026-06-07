@@ -59,6 +59,9 @@ class AuthRepository {
     // All profile fields are optional — read null-safe so a partial payload
     // (e.g. LinkedIn email scope not granted) never crashes sign-in.
     final linkedinHash = data['linkedinHash'] as String? ?? '';
+    // Pseudonymous, server-derived id used to read this user's anonymous
+    // check-ins / insights. The function also stamps it on the user doc.
+    final userIdHash = data['userIdHash'] as String? ?? '';
     final displayName = data['displayName'] as String?;
     final avatarUrl = data['avatarUrl'] as String?;
     final email = data['email'] as String?;
@@ -83,6 +86,7 @@ class AuthRepository {
       user = UserModel(
         uid: uid,
         linkedinHash: linkedinHash,
+        userIdHash: userIdHash,
         displayName: displayName,
         avatarUrl: avatarUrl,
         email: email,
@@ -96,6 +100,7 @@ class AuthRepository {
       user = UserModel.fromFirestore(snapshot);
       await userRef.set({
         'linkedinHash': linkedinHash,
+        if (userIdHash.isNotEmpty) 'userIdHash': userIdHash,
         if (displayName != null) 'displayName': displayName,
         if (avatarUrl != null) 'avatarUrl': avatarUrl,
         if (email != null) 'email': email,

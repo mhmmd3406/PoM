@@ -66,6 +66,25 @@ function hashLinkedinId(linkedinId: string, secret: string): string {
   return crypto.createHmac("sha256", secret).update(linkedinId).digest("hex");
 }
 
+/**
+ * Server-only salt for the pseudonymous `userIdHash`. Kept on the backend (never
+ * shipped to the client) so that a leaked check-ins dump cannot be reversed to a
+ * Firebase uid via a rainbow table. The hash is deterministic for a given uid so
+ * the same value can be re-derived for queries / erasure.
+ */
+function userHashSalt(): string {
+  return process.env.USER_HASH_SALT ?? "pom-user-id-hash-salt";
+}
+
+/**
+ * Pseudonymous, deterministic per-user identifier. Stored on the user doc and on
+ * every check-in so check-ins carry NO raw uid; firestore.rules bridge owner
+ * access by comparing the caller's users/{uid}.userIdHash to the doc's value.
+ */
+function hashUserId(uid: string): string {
+  return crypto.createHmac("sha256", userHashSalt()).update(uid).digest("hex");
+}
+
 /** Extract the largest available profile image URL from a LinkedIn lite profile. */
 function extractLinkedinAvatar(profile: {
   profilePicture?: {
@@ -249,6 +268,12 @@ export const linkedinAuth = onCall(
       logger.info("New LinkedIn user created", { uid });
     }
 
+    // Ensure the pseudonymous userIdHash is present on the user doc. New users:
+    // stamps it on the freshly-created doc; existing users: backfills if missing.
+    // firestore.rules read this to bridge owner access to anonymous check-ins.
+    const userIdHash = hashUserId(uid);
+    await db.collection("users").doc(uid).set({ userIdHash }, { merge: true });
+
     // Set custom claims on the Firebase Auth user record
     await admin.auth().setCustomUserClaims(uid, {
       role: "free",
@@ -266,7 +291,7 @@ export const linkedinAuth = onCall(
     // Return the custom token plus the profile fields the mobile client needs
     // to render immediately. `linkedinHash` is the server-computed dedup key so
     // the client never re-hashes with a divergent secret.
-    return { customToken, isNewUser, linkedinHash, displayName, avatarUrl, email };
+    return { customToken, isNewUser, linkedinHash, userIdHash, displayName, avatarUrl, email };
   }
 );
 
@@ -599,13 +624,42 @@ export const deleteAccount = onCall(async (request: CallableRequest<unknown>) =>
   const uid = request.auth.uid;
   const timestamp = Date.now();
 
-  // Anonymise user document — keep record for aggregate stats
+  // The pseudonym this user's check-ins / insights are keyed by.
+  const userDoc = await db.collection("users").doc(uid).get();
+  const oldHash =
+    (userDoc.data()?.userIdHash as string | undefined) ?? hashUserId(uid);
+  // Unique per user (carries the old hash) so two accounts deleted in the same
+  // instant never collapse into one cohort in aggregate stats.
+  const deletedHash = `deleted_${oldHash}`;
+
+  // Right to erasure on check-ins: rotate every past check-in's userIdHash to
+  // sever the pseudonym → person link. The anonymised rows remain so company
+  // aggregates stay intact. (Single batch; a user never has >500 check-ins
+  // pre-launch — chunk this if that assumption ever changes.)
+  const userCheckins = await db
+    .collection("checkins")
+    .where("userIdHash", "==", oldHash)
+    .get();
+  if (!userCheckins.empty) {
+    const batch = db.batch();
+    userCheckins.docs.forEach((d) =>
+      batch.update(d.ref, { userIdHash: deletedHash })
+    );
+    await batch.commit();
+  }
+
+  // Delete the personal insights doc (the user's own aggregate).
+  await db.collection("insights").doc(oldHash).delete();
+
+  // Anonymise the user document — keep the record for company aggregate stats.
   await db.collection("users").doc(uid).update({
     displayName: null,
     firstName: null,
     lastName: null,
     avatar: null,
+    email: null,
     linkedin_hash: `deleted_${timestamp}`,
+    userIdHash: deletedHash,
     deleted: true,
     deleted_at: admin.firestore.FieldValue.serverTimestamp(),
     updated_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -615,7 +669,9 @@ export const deleteAccount = onCall(async (request: CallableRequest<unknown>) =>
   await admin.auth().revokeRefreshTokens(uid);
   await admin.auth().deleteUser(uid);
 
-  logger.info("Account deleted and anonymised", { uid });
+  logger.info("Account deleted and anonymised", {
+    checkinsRotated: userCheckins.size,
+  });
   return { success: true };
 });
 
@@ -624,7 +680,7 @@ export const deleteAccount = onCall(async (request: CallableRequest<unknown>) =>
 // ---------------------------------------------------------------------------
 
 type CheckinDoc = {
-  userId: string;
+  userIdHash: string;
   companyId?: string;
   department?: string;
   scores: Record<string, number>;
@@ -638,8 +694,8 @@ export const computeInsights = onDocumentCreated(
     if (!snap) return;
 
     const checkin = snap.data() as CheckinDoc;
-    const { userId, companyId, department, scores } = checkin;
-    if (!userId) return;
+    const { userIdHash, companyId, department, scores } = checkin;
+    if (!userIdHash) return;
 
     // Load thresholds (cached)
     const thresholds = (await cachedRead("platform_config/thresholds", async () => {
@@ -654,7 +710,7 @@ export const computeInsights = onDocumentCreated(
     // Fetch all user check-ins for personal stats (ordered asc for trend)
     const userCheckinsSnap = await db
       .collection("checkins")
-      .where("userId", "==", userId)
+      .where("userIdHash", "==", userIdHash)
       .orderBy("created_at", "asc")
       .get();
 
@@ -725,13 +781,16 @@ export const computeInsights = onDocumentCreated(
       }
     }
 
-    // Write insights document for the user
+    // Write insights document for the user — keyed by the pseudonymous
+    // userIdHash (no raw uid), so the insights collection is also anonymous at
+    // rest. firestore.rules grant owner read by comparing the doc id to the
+    // caller's users/{uid}.userIdHash.
     await db
       .collection("insights")
-      .doc(userId)
+      .doc(userIdHash)
       .set(
         {
-          userId,
+          userIdHash,
           companyId: companyId ?? null,
           department_name: department ?? null,
           personal: {
@@ -751,7 +810,7 @@ export const computeInsights = onDocumentCreated(
         { merge: true }
       );
 
-    logger.info("Insights computed", { userId, companyId, retentionRisk });
+    logger.info("Insights computed", { companyId, retentionRisk });
   }
 );
 

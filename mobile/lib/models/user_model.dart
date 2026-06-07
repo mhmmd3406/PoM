@@ -4,6 +4,7 @@ class UserModel {
   const UserModel({
     required this.uid,
     required this.linkedinHash,
+    this.userIdHash = '',
     this.displayName,
     this.avatarUrl,
     this.role = 'free',
@@ -22,6 +23,12 @@ class UserModel {
 
   final String uid;
   final String linkedinHash;
+
+  /// Pseudonymous, server-derived identifier (HMAC-salted hash of the uid).
+  /// Used to read this user's anonymous check-ins / insights without exposing
+  /// the raw uid. Written by the linkedinAuth Cloud Function; empty in debug.
+  final String userIdHash;
+
   final String? displayName;
   final String? avatarUrl;
 
@@ -48,6 +55,7 @@ class UserModel {
     return UserModel(
       uid: doc.id,
       linkedinHash: data['linkedinHash'] as String? ?? '',
+      userIdHash: data['userIdHash'] as String? ?? '',
       displayName: data['displayName'] as String?,
       avatarUrl: data['avatarUrl'] as String?,
       role: data['role'] as String? ?? 'free',
@@ -78,6 +86,7 @@ class UserModel {
   Map<String, dynamic> toFirestore() {
     return {
       'linkedinHash': linkedinHash,
+      if (userIdHash.isNotEmpty) 'userIdHash': userIdHash,
       if (displayName != null) 'displayName': displayName,
       if (avatarUrl != null) 'avatarUrl': avatarUrl,
       'role': role,
@@ -99,6 +108,7 @@ class UserModel {
   UserModel copyWith({
     String? uid,
     String? linkedinHash,
+    String? userIdHash,
     String? displayName,
     String? avatarUrl,
     String? role,
@@ -117,6 +127,7 @@ class UserModel {
     return UserModel(
       uid: uid ?? this.uid,
       linkedinHash: linkedinHash ?? this.linkedinHash,
+      userIdHash: userIdHash ?? this.userIdHash,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       role: role ?? this.role,

@@ -136,7 +136,7 @@ class CheckinFlowNotifier extends Notifier<CheckinFlowState> {
       await Future.delayed(const Duration(milliseconds: 600));
       final mock = CheckinModel(
         id: 'debug_${DateTime.now().millisecondsSinceEpoch}',
-        uid: user.uid,
+        userIdHash: user.userIdHash,
         overallMood: state.overallMood!,
         workStress: state.workStress!,
         teamHarmony: state.teamHarmony!,
@@ -154,6 +154,7 @@ class CheckinFlowNotifier extends Notifier<CheckinFlowState> {
       final repo = ref.read(checkinRepositoryProvider);
       final checkin = await repo.submitCheckin(
         uid: user.uid,
+        userIdHash: user.userIdHash,
         overallMood: state.overallMood!,
         workStress: state.workStress!,
         teamHarmony: state.teamHarmony!,
@@ -193,5 +194,5 @@ final checkinCooldownProvider =
   if (user == null) return Duration.zero;
 
   final repo = ref.watch(checkinRepositoryProvider);
-  return repo.remainingCooldown(user.uid);
+  return repo.remainingCooldown(user.userIdHash);
 });

@@ -15,6 +15,7 @@ void main() {
   const testUser = UserModel(
     uid: 'u1',
     linkedinHash: 'hash1',
+    userIdHash: 'hash_u1',
     role: 'pro',
     kvkkAccepted: true,
     kvkkVersion: '1.0',
@@ -22,7 +23,7 @@ void main() {
 
   final fakeCheckin = CheckinModel(
     id: 'c1',
-    uid: 'u1',
+    userIdHash: 'hash_u1',
     overallMood: 4,
     workStress: 3,
     teamHarmony: 5,
@@ -101,6 +102,7 @@ void main() {
     test('submit calls repository and marks isComplete on success', () async {
       when(() => mockRepo.submitCheckin(
             uid: any(named: 'uid'),
+            userIdHash: any(named: 'userIdHash'),
             overallMood: any(named: 'overallMood'),
             workStress: any(named: 'workStress'),
             teamHarmony: any(named: 'teamHarmony'),
@@ -135,6 +137,7 @@ void main() {
     test('submit sets error message on repository failure', () async {
       when(() => mockRepo.submitCheckin(
             uid: any(named: 'uid'),
+            userIdHash: any(named: 'userIdHash'),
             overallMood: any(named: 'overallMood'),
             workStress: any(named: 'workStress'),
             teamHarmony: any(named: 'teamHarmony'),

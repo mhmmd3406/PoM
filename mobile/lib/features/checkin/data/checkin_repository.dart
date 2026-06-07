@@ -12,8 +12,13 @@ class CheckinRepository {
   final FirebaseFirestore _firestore;
 
   /// Submit a new check-in and update the user's lastCheckinAt.
+  ///
+  /// [uid] is used only to stamp lastCheckinAt on the caller's own user doc; the
+  /// check-in itself carries only [userIdHash] (no raw uid), and uses a random
+  /// Firestore auto-ID so the document name leaks nothing either.
   Future<CheckinModel> submitCheckin({
     required String uid,
+    required String userIdHash,
     required int overallMood,
     required int workStress,
     required int teamHarmony,
@@ -23,10 +28,11 @@ class CheckinRepository {
     String? department,
   }) async {
     final now = DateTime.now();
-    final docId = '${uid}_${now.millisecondsSinceEpoch}';
+    final docRef =
+        _firestore.collection(AppConstants.checkinsCollection).doc();
     final checkin = CheckinModel(
-      id: docId,
-      uid: uid,
+      id: docRef.id,
+      userIdHash: userIdHash,
       overallMood: overallMood,
       workStress: workStress,
       teamHarmony: teamHarmony,
@@ -39,13 +45,10 @@ class CheckinRepository {
 
     final batch = _firestore.batch();
 
-    // Write checkin doc
-    batch.set(
-      _firestore.collection(AppConstants.checkinsCollection).doc(docId),
-      checkin.toFirestore(),
-    );
+    // Write checkin doc (anonymous: auto-ID + userIdHash only).
+    batch.set(docRef, checkin.toFirestore());
 
-    // Update user's lastCheckinAt
+    // Update the caller's own lastCheckinAt (owner-writable, not anonymous data).
     batch.update(
       _firestore.collection(AppConstants.usersCollection).doc(uid),
       {'lastCheckinAt': Timestamp.fromDate(now)},
@@ -55,11 +58,11 @@ class CheckinRepository {
     return checkin;
   }
 
-  /// Get the last check-in for a user.
-  Future<CheckinModel?> getLastCheckin(String uid) async {
+  /// Get the last check-in for a user (by pseudonymous hash).
+  Future<CheckinModel?> getLastCheckin(String userIdHash) async {
     final snap = await _firestore
         .collection(AppConstants.checkinsCollection)
-        .where('uid', isEqualTo: uid)
+        .where('userIdHash', isEqualTo: userIdHash)
         .orderBy('createdAt', descending: true)
         .limit(1)
         .get();
@@ -69,8 +72,8 @@ class CheckinRepository {
   }
 
   /// Check if the user is within the cooldown window.
-  Future<bool> isWithinCooldown(String uid) async {
-    final last = await getLastCheckin(uid);
+  Future<bool> isWithinCooldown(String userIdHash) async {
+    final last = await getLastCheckin(userIdHash);
     if (last == null) return false;
 
     final cooldownEnd = last.createdAt.add(
@@ -80,8 +83,8 @@ class CheckinRepository {
   }
 
   /// Returns remaining cooldown duration (zero if not in cooldown).
-  Future<Duration> remainingCooldown(String uid) async {
-    final last = await getLastCheckin(uid);
+  Future<Duration> remainingCooldown(String userIdHash) async {
+    final last = await getLastCheckin(userIdHash);
     if (last == null) return Duration.zero;
 
     final cooldownEnd = last.createdAt.add(
@@ -92,10 +95,10 @@ class CheckinRepository {
   }
 
   /// Stream the user's most recent check-ins (up to [limit]).
-  Stream<List<CheckinModel>> watchCheckins(String uid, {int limit = 10}) {
+  Stream<List<CheckinModel>> watchCheckins(String userIdHash, {int limit = 10}) {
     return _firestore
         .collection(AppConstants.checkinsCollection)
-        .where('uid', isEqualTo: uid)
+        .where('userIdHash', isEqualTo: userIdHash)
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()

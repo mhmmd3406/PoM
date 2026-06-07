@@ -45,13 +45,17 @@ class AccountRepository {
   }
 
   /// Data portability: gathers the signed-in user's own data (profile +
-  /// their check-ins) into a JSON-encodable map. Only owner-readable data is
-  /// touched, so no elevated permissions are required.
-  Future<Map<String, dynamic>> exportMyData(String uid) async {
+  /// their check-ins) into a JSON-encodable map. The profile is read by [uid];
+  /// the (anonymous) check-ins are read by the pseudonymous [userIdHash]. Only
+  /// owner-readable data is touched, so no elevated permissions are required.
+  Future<Map<String, dynamic>> exportMyData({
+    required String uid,
+    required String userIdHash,
+  }) async {
     final userSnap = await _firestore.collection('users').doc(uid).get();
     final checkinSnap = await _firestore
         .collection('checkins')
-        .where('uid', isEqualTo: uid)
+        .where('userIdHash', isEqualTo: userIdHash)
         .get();
 
     return {
