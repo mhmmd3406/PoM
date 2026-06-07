@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { httpsCallable } from 'firebase/functions'
-import { collection, query, where, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, deleteDoc, Timestamp } from 'firebase/firestore'
 import { db, functions } from '../firebase'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../hooks/useAuth'
@@ -142,9 +142,10 @@ function RemoveAdminModal({ admin, onClose, onRemoved }: RemoveModalProps) {
     setLoading(true)
     setError(null)
     try {
-      // Mark in users doc — the actual claim removal requires a Cloud Function
-      // since setAdminClaim only adds. This acts as a server-side signal.
-      await updateDoc(doc(db, 'users', admin.uid), { is_admin_pending_removal: true })
+      // Remove the admins-collection record so the user drops off the list.
+      // NOTE: revoking the Auth custom claim itself requires a server-side
+      // Cloud Function (see amber note below); this removes portal visibility.
+      await deleteDoc(doc(db, 'admins', admin.uid))
       onRemoved()
       onClose()
     } catch (err) {
@@ -192,9 +193,11 @@ export default function AdminsPage() {
   const { data: admins, isLoading, isError, refetch } = useQuery({
     queryKey: ['admins'],
     queryFn: async () => {
-      const snap = await getDocs(
-        query(collection(db, 'users'), where('is_admin', '==', true))
-      )
+      // Admins live in the `admins` collection (written by the setAdminClaim
+      // Cloud Function). The previous `users where is_admin == true` query
+      // always returned empty because admin status is an Auth custom claim,
+      // never a users-doc field — that was the F-ADM6 "empty list" bug.
+      const snap = await getDocs(collection(db, 'admins'))
       return snap.docs.map((d) => ({ uid: d.id, ...d.data() } as AdminUser))
     },
   })

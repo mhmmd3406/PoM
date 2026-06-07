@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase'
-import { useCollection, where, orderBy, Timestamp } from '../hooks/useFirestore'
+import { useCollection, where, Timestamp } from '../hooks/useFirestore'
 import { DataTable, Column } from '../components/DataTable'
 import { useAuth } from '../hooks/useAuth'
 
@@ -167,7 +167,11 @@ export default function UsersPage() {
 
   const { data: users, isLoading, refetch } = useCollection<UserDoc>(
     'users',
-    [where('deleted', '==', false), orderBy('created_at', 'desc')],
+    // No orderBy('created_at'): Firestore's orderBy silently excludes docs that
+    // lack the field, which hid most users (F-ADM2: 34 shown vs 399 real, since
+    // older user docs have no created_at). Fetch all non-deleted users and sort
+    // client-side instead — consistent with the Dashboard count.
+    [where('deleted', '==', false)],
     ['users', 'table'],
   )
 
@@ -185,7 +189,10 @@ export default function UsersPage() {
           u.department?.toLowerCase().includes(q),
       )
     }
-    return list
+    // Sort newest-first client-side; docs without created_at sort last.
+    return [...list].sort(
+      (a, b) => (b.created_at?.seconds ?? 0) - (a.created_at?.seconds ?? 0),
+    )
   }, [users, roleFilter, search])
 
   const columns: Column<UserDoc>[] = [
