@@ -42,6 +42,12 @@ class InsightModel {
           : companyScores!.values.reduce((a, b) => a + b) /
               companyScores!.length;
 
+  double get benchmarkAverage =>
+      benchmarkScores == null || benchmarkScores!.isEmpty
+          ? 0
+          : benchmarkScores!.values.reduce((a, b) => a + b) /
+              benchmarkScores!.length;
+
   List<double> get personalList => _toOrderedList(personalScores);
   List<double> get companyList =>
       companyScores != null ? _toOrderedList(companyScores!) : [];

@@ -9,6 +9,7 @@ import '../../../models/insight_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../checkin/providers/checkin_provider.dart';
 import '../../insights/providers/insights_provider.dart';
+import '../../surveys/providers/surveys_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -18,6 +19,11 @@ class HomeScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final insightsAsync = ref.watch(insightsStreamProvider);
     final cooldownAsync = ref.watch(checkinCooldownProvider);
+    // First active survey the user hasn't answered yet (null while loading,
+    // on error, or when none are pending) — drives the "Yeni anket" card.
+    final pendingSurveys =
+        ref.watch(pendingSurveysProvider).valueOrNull ?? const [];
+    final nextSurvey = pendingSurveys.isEmpty ? null : pendingSurveys.first;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
@@ -216,8 +222,8 @@ class HomeScreen extends ConsumerWidget {
                       children: [
                         Expanded(
                           child: _CompanyPulseCard(
-                            companyAvg:
-                                insights?.companyAverage ?? 3.9,
+                            companyAvg: insights?.companyAverage ?? 0,
+                            sectorAvg: insights?.benchmarkAverage ?? 0,
                             isDark: isDark,
                             ink: ink,
                             ink2: ink2,
@@ -229,8 +235,12 @@ class HomeScreen extends ConsumerWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _NewSurveyCard(
+                            survey: nextSurvey,
                             isDark: isDark,
                             ink: ink,
+                            ink3: ink3,
+                            surface: surface,
+                            border: border,
                             onTap: () => context.go('/surveys'),
                           ),
                         ),
@@ -682,7 +692,7 @@ class _InsightsCard extends StatelessWidget {
                         ),
                         child: Text(
                           trend > 0
-                              ? '↑ +0.3 geçen haftaya göre'
+                              ? '↑ Geçen haftaya göre'
                               : trend < 0
                                   ? '↓ Geçen haftaya göre'
                                   : '→ Sabit',
@@ -830,6 +840,7 @@ class _RadarPainter extends CustomPainter {
 class _CompanyPulseCard extends StatelessWidget {
   const _CompanyPulseCard({
     required this.companyAvg,
+    required this.sectorAvg,
     required this.isDark,
     required this.ink,
     required this.ink2,
@@ -839,6 +850,7 @@ class _CompanyPulseCard extends StatelessWidget {
   });
 
   final double companyAvg;
+  final double sectorAvg;
   final bool isDark;
   final Color ink;
   final Color ink2;
@@ -875,7 +887,7 @@ class _CompanyPulseCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            companyAvg.toStringAsFixed(1),
+            companyAvg > 0 ? companyAvg.toStringAsFixed(1) : '—',
             style: GoogleFonts.bricolageGrotesque(
               fontSize: 28,
               fontWeight: FontWeight.w700,
@@ -885,7 +897,9 @@ class _CompanyPulseCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Sektör ort. 3.6',
+            sectorAvg > 0
+                ? 'Sektör ort. ${sectorAvg.toStringAsFixed(1)}'
+                : 'Sektör verisi yok',
             style: TextStyle(fontSize: 12, color: ink3),
           ),
         ],
@@ -898,17 +912,73 @@ class _CompanyPulseCard extends StatelessWidget {
 
 class _NewSurveyCard extends StatelessWidget {
   const _NewSurveyCard({
+    required this.survey,
     required this.isDark,
     required this.ink,
+    required this.ink3,
+    required this.surface,
+    required this.border,
     required this.onTap,
   });
 
+  /// First pending survey, or null when none are pending (or still loading).
+  final SurveyModel? survey;
   final bool isDark;
   final Color ink;
+  final Color ink3;
+  final Color surface;
+  final Color border;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final s = survey;
+
+    // No pending survey → honest empty state (no fabricated "new survey").
+    if (s == null) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'ANKETLER',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: ink3,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Bekleyen anket yok',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: ink,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Yeni anket gelince burada',
+                style: TextStyle(fontSize: 11, color: ink3),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final source = s.isAdminSurvey ? 'PoM' : 'Şirket';
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -944,7 +1014,9 @@ class _NewSurveyCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Hibrit Çalışma Modeli',
+              s.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -954,7 +1026,7 @@ class _NewSurveyCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'İK · 8 soru · 2 dk',
+              '$source · ${s.questionCount} soru',
               style: const TextStyle(
                 fontSize: 11,
                 color: AppColors.amberDeep,

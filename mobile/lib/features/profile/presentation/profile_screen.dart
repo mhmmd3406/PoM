@@ -13,6 +13,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../insights/providers/insights_provider.dart';
+import '../../surveys/providers/surveys_provider.dart';
 import '../data/account_repository.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -28,6 +30,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user      = ref.watch(currentUserProvider);
     final themeMode = ref.watch(themeModeProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Real stats (no hardcoded values). insights = computeInsights aggregate
+    // doc; completedCount = answered-surveys provider. Each degrades gracefully
+    // (0 / "—") while loading or when there is no data yet.
+    final insights = ref.watch(insightsStreamProvider).valueOrNull;
+    final completedCount =
+        ref.watch(completedSurveysProvider).valueOrNull?.length ?? 0;
+    final checkinCount = insights?.totalCheckins ?? 0;
+    final wellbeing = (insights != null && insights.personalAverage > 0)
+        ? insights.personalAverage.toStringAsFixed(1)
+        : '—';
 
     final bg      = isDark ? AppColors.darkBg      : AppColors.lightBg;
     final surface = isDark ? AppColors.darkSurface  : AppColors.lightSurface;
@@ -147,12 +160,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     bgColor: isDark ? AppColors.blueSoftDark : AppColors.blueSoft,
                                     fgColor: isDark ? AppColors.blueDark : AppColors.blueDeep,
                                   ),
-                                  const SizedBox(width: 6),
-                                  _Chip(
-                                    label: '12 hafta seri',
-                                    bgColor: isDark ? AppColors.amberSoftDark : AppColors.amberSoft,
-                                    fgColor: AppColors.amberDeep,
-                                  ),
                                   if (kDebugMode) ...[
                                     const SizedBox(width: 6),
                                     _Chip(
@@ -176,11 +183,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   // ── Stats strip ──────────────────────────────────────────────
                   Row(
                     children: [
-                      Expanded(child: _StatCell(label: 'CHECK-İN', value: '12', ink: ink, ink3: ink3, surface: surface, border: border)),
+                      Expanded(child: _StatCell(label: 'CHECK-İN', value: '$checkinCount', ink: ink, ink3: ink3, surface: surface, border: border)),
                       const SizedBox(width: 8),
-                      Expanded(child: _StatCell(label: 'ANKET', value: '8', ink: ink, ink3: ink3, surface: surface, border: border)),
+                      Expanded(child: _StatCell(label: 'ANKET', value: '$completedCount', ink: ink, ink3: ink3, surface: surface, border: border)),
                       const SizedBox(width: 8),
-                      Expanded(child: _StatCell(label: 'REFAH', value: '4.2', ink: ink, ink3: ink3, surface: surface, border: border)),
+                      Expanded(child: _StatCell(label: 'REFAH', value: wellbeing, ink: ink, ink3: ink3, surface: surface, border: border)),
                     ],
                   ),
 
