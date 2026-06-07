@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class CheckinModel {
   const CheckinModel({
     required this.id,
-    required this.uid,
+    required this.userIdHash,
     required this.overallMood,
     required this.workStress,
     required this.teamHarmony,
@@ -16,7 +16,10 @@ class CheckinModel {
   });
 
   final String id;
-  final String uid;
+
+  /// Pseudonymous author id (HMAC-salted hash of the uid). Check-ins carry NO
+  /// raw uid, so DB-level access cannot map a check-in back to a person.
+  final String userIdHash;
 
   /// 1–5 scale (1 = worst, 5 = best)
   final int overallMood;
@@ -60,7 +63,7 @@ class CheckinModel {
 
     return CheckinModel(
       id: doc.id,
-      uid: (data['uid'] ?? data['userId']) as String? ?? '',
+      userIdHash: data['userIdHash'] as String? ?? '',
       overallMood: read(moodKey),
       workStress: read(stressKey),
       teamHarmony: read(teamKey),
@@ -77,8 +80,8 @@ class CheckinModel {
   Map<String, dynamic> toFirestore() {
     final ts = Timestamp.fromDate(createdAt);
     return {
-      'uid': uid,
-      'userId': uid,
+      // Pseudonymous author id only — no raw uid/userId on the check-in.
+      'userIdHash': userIdHash,
       // Single canonical representation — camelCase English keys. The previous
       // Turkish keys and the redundant flat top-level fields are gone.
       'scores': {

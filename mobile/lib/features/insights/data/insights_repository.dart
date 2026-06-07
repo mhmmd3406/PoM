@@ -11,19 +11,20 @@ class InsightsRepository {
 
   final FirebaseFirestore _firestore;
 
-  /// Stream personal insights document for a user.
-  Stream<InsightModel?> watchInsights(String uid) {
+  /// Stream personal insights document for a user. The insights doc is keyed by
+  /// the pseudonymous [userIdHash] (no raw uid), matching computeInsights.
+  Stream<InsightModel?> watchInsights(String userIdHash) {
     return _firestore
         .collection(AppConstants.insightsCollection)
-        .doc(uid)
+        .doc(userIdHash)
         .snapshots()
         .map((snap) => snap.exists ? InsightModel.fromFirestore(snap) : null);
   }
 
-  Future<InsightModel?> getInsights(String uid) async {
+  Future<InsightModel?> getInsights(String userIdHash) async {
     final snap = await _firestore
         .collection(AppConstants.insightsCollection)
-        .doc(uid)
+        .doc(userIdHash)
         .get();
     return snap.exists ? InsightModel.fromFirestore(snap) : null;
   }

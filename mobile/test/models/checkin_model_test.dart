@@ -6,7 +6,7 @@ void main() {
 
   final checkin = CheckinModel(
     id: 'c1',
-    uid: 'u1',
+    userIdHash: 'hash_u1',
     overallMood: 4,
     workStress: 3,
     teamHarmony: 5,
@@ -29,10 +29,11 @@ void main() {
       expect(checkin.isAnonymized, true);
     });
 
-    test('toFirestore includes both uid and userId for backwards compat', () {
+    test('toFirestore writes pseudonymous userIdHash and no raw uid/userId', () {
       final map = checkin.toFirestore();
-      expect(map['uid'], 'u1');
-      expect(map['userId'], 'u1');
+      expect(map['userIdHash'], 'hash_u1');
+      expect(map.containsKey('uid'), false);
+      expect(map.containsKey('userId'), false);
     });
 
     test('toFirestore writes scores map with canonical camelCase keys', () {
@@ -57,7 +58,7 @@ void main() {
     test('toFirestore includes companyId and department when set', () {
       final withCompany = CheckinModel(
         id: 'c2',
-        uid: 'u1',
+        userIdHash: 'hash_u1',
         overallMood: 3,
         workStress: 3,
         teamHarmony: 3,

@@ -20,6 +20,12 @@ service cloud.firestore {
     function isCompanyMember(companyId) {
       return isAuthenticated() && request.auth.token.company_id == companyId;
     }
+    // The caller's own pseudonymous userIdHash, read from their user doc. Used to
+    // bridge owner access to anonymous check-ins/insights (which carry no uid).
+    // Only call after isAuthenticated() so request.auth.uid is non-null.
+    function myUserIdHash() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userIdHash;
+    }
 
     // ── users ────────────────────────────────────────────────────────────────
     match /users/{userId} {
@@ -30,11 +36,15 @@ service cloud.firestore {
     }
 
     // ── checkins ─────────────────────────────────────────────────────────────
+    // Anonymous: docs carry no raw uid, only a pseudonymous userIdHash. Owner
+    // access is bridged by comparing the caller's own users/{uid}.userIdHash to
+    // the doc's userIdHash via get(). The client MUST query with
+    // .where('userIdHash','==', myHash) so the query satisfies the rule.
     match /checkins/{checkinId} {
       allow read:   if isAuthenticated()
-                    && (resource.data.userId == request.auth.uid || isAdmin());
+                    && (isAdmin() || resource.data.userIdHash == myUserIdHash());
       allow create: if isAuthenticated()
-                    && request.resource.data.userId == request.auth.uid;
+                    && request.resource.data.userIdHash == myUserIdHash();
       allow update, delete: if isAdmin();
     }
 
@@ -57,9 +67,11 @@ service cloud.firestore {
     }
 
     // ── insights (Cloud Functions only) ──────────────────────────────────────
+    // Keyed by the pseudonymous userIdHash (no raw uid). Owner read is bridged
+    // the same way as check-ins.
     match /insights/{insightId} {
       allow read: if isAuthenticated()
-                  && (resource.data.userId == request.auth.uid || isAdmin());
+                  && (isAdmin() || resource.data.userIdHash == myUserIdHash());
       allow write: if false;
     }
 

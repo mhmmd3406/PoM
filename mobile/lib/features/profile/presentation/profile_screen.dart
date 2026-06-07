@@ -410,11 +410,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _exportMyData() async {
-    final uid = ref.read(currentUserProvider)?.uid;
+    final user = ref.read(currentUserProvider);
     final messenger = ScaffoldMessenger.of(context);
-    if (uid == null) return;
+    if (user == null) return;
     try {
-      final data = await ref.read(accountRepositoryProvider).exportMyData(uid);
+      final data = await ref
+          .read(accountRepositoryProvider)
+          .exportMyData(uid: user.uid, userIdHash: user.userIdHash);
       final json = const JsonEncoder.withIndent('  ').convert(data);
       if (!mounted) return;
       await showDialog<void>(
