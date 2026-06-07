@@ -108,9 +108,11 @@ public sealed class FirestoreService
                 ? doc.ToDictionary().ToDictionary(kv => kv.Key, kv => Convert.ToInt64(kv.Value))
                 : new Dictionary<string, long>();
 
-            // Apply safety floors
-            raw["company_min_n"]    = Math.Max(raw.GetValueOrDefault("company_min_n",    15), 7);
-            raw["department_min_n"] = Math.Max(raw.GetValueOrDefault("department_min_n", 10), 5);
+            // Apply hard-locked privacy floors (legal anonymity guarantee):
+            // company >= 15, department >= 10. Admins may raise but never lower
+            // these. Keep in lock-step with functions/src/thresholds.ts.
+            raw["company_min_n"]    = Math.Max(raw.GetValueOrDefault("company_min_n",    15), 15);
+            raw["department_min_n"] = Math.Max(raw.GetValueOrDefault("department_min_n", 10), 10);
 
             SetCache(cacheKey, raw);
             return raw;
