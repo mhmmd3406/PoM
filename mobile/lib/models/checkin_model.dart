@@ -42,29 +42,30 @@ class CheckinModel {
         workLifeBalance.toDouble(),
       ];
 
+  /// Canonical dimension keys stored inside the `scores` map. These match the
+  /// keys consumed by `computeInsights` (Cloud Functions) and the .NET B2B
+  /// `InsightsAggregator`, so all three layers now speak one vocabulary.
+  static const moodKey = 'overallMood';
+  static const stressKey = 'workStress';
+  static const teamKey = 'teamHarmony';
+  static const growthKey = 'personalGrowth';
+  static const balanceKey = 'workLifeBalance';
+
   factory CheckinModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     final scores = data['scores'] as Map<String, dynamic>?;
     final createdAtRaw = data['createdAt'] ?? data['created_at'];
+
+    int read(String key) => (scores?[key] as num?)?.round() ?? 3;
+
     return CheckinModel(
       id: doc.id,
       uid: (data['uid'] ?? data['userId']) as String? ?? '',
-      overallMood: (scores?['Genel Ruh Hali'] ?? data['overallMood'])
-              ?.round() as int? ??
-          3,
-      workStress: (scores?['İş Stresi'] ?? data['workStress'])
-              ?.round() as int? ??
-          3,
-      teamHarmony: (scores?['Takım Uyumu'] ?? data['teamHarmony'])
-              ?.round() as int? ??
-          3,
-      personalGrowth: (scores?['Kişisel Gelişim'] ?? data['personalGrowth'])
-              ?.round() as int? ??
-          3,
-      workLifeBalance:
-          (scores?['İş-Yaşam Dengesi'] ?? data['workLifeBalance'])
-                  ?.round() as int? ??
-              3,
+      overallMood: read(moodKey),
+      workStress: read(stressKey),
+      teamHarmony: read(teamKey),
+      personalGrowth: read(growthKey),
+      workLifeBalance: read(balanceKey),
       createdAt:
           createdAtRaw is Timestamp ? createdAtRaw.toDate() : DateTime.now(),
       companyId: data['companyId'] as String?,
@@ -78,18 +79,17 @@ class CheckinModel {
     return {
       'uid': uid,
       'userId': uid,
+      // Single canonical representation — camelCase English keys. The previous
+      // Turkish keys and the redundant flat top-level fields are gone.
       'scores': {
-        'Genel Ruh Hali': overallMood.toDouble(),
-        'İş Stresi': workStress.toDouble(),
-        'Takım Uyumu': teamHarmony.toDouble(),
-        'Kişisel Gelişim': personalGrowth.toDouble(),
-        'İş-Yaşam Dengesi': workLifeBalance.toDouble(),
+        moodKey: overallMood.toDouble(),
+        stressKey: workStress.toDouble(),
+        teamKey: teamHarmony.toDouble(),
+        growthKey: personalGrowth.toDouble(),
+        balanceKey: workLifeBalance.toDouble(),
       },
-      'overallMood': overallMood,
-      'workStress': workStress,
-      'teamHarmony': teamHarmony,
-      'personalGrowth': personalGrowth,
-      'workLifeBalance': workLifeBalance,
+      // Both timestamp keys retained: computeInsights orders by `created_at`,
+      // the mobile check-in repo orders by `createdAt`.
       'createdAt': ts,
       'created_at': ts,
       if (companyId != null) 'companyId': companyId,

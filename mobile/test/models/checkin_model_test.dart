@@ -35,14 +35,17 @@ void main() {
       expect(map['userId'], 'u1');
     });
 
-    test('toFirestore writes scores map with Turkish keys', () {
+    test('toFirestore writes scores map with canonical camelCase keys', () {
       final map = checkin.toFirestore();
       final scores = map['scores'] as Map<String, dynamic>;
-      expect(scores['Genel Ruh Hali'], 4.0);
-      expect(scores['İş Stresi'], 3.0);
-      expect(scores['Takım Uyumu'], 5.0);
-      expect(scores['Kişisel Gelişim'], 2.0);
-      expect(scores['İş-Yaşam Dengesi'], 4.0);
+      expect(scores['overallMood'], 4.0);
+      expect(scores['workStress'], 3.0);
+      expect(scores['teamHarmony'], 5.0);
+      expect(scores['personalGrowth'], 2.0);
+      expect(scores['workLifeBalance'], 4.0);
+      // Old Turkish keys and the redundant flat top-level fields are gone.
+      expect(scores.containsKey('Genel Ruh Hali'), false);
+      expect(map.containsKey('overallMood'), false);
     });
 
     test('toFirestore does not include null optional fields', () {
