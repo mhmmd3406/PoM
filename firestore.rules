@@ -116,18 +116,35 @@ service cloud.firestore {
 
     // ── survey responses ─────────────────────────────────────────────────────
     // Pseudonymous response docs (userIdHash + answers, no PII).
-    // create → herhangi authenticated kullanıcı (kendi yanıtını yazar)
-    // read   → is_admin VEYA aynı şirketin üyesi (company_id claim eşleşmesi)
-    //   NOT: Mobil artık survey_responses OKUMUYOR. "Zaten cevaplandı" bilgisi
-    //   kullanıcının kendi users/{uid}.answeredSurveyIds alanında tutulur (yalnız
-    //   sahibe açık), böylece read'i şirkete bağlamak mobil akışı bozmadan
-    //   şirketler-arası okumayı kapatır. Şirket paneli (company_admin) yanıtları
-    //   okurken sorgusunu `where companyId == <kendi şirketi>` ile kısıtlamalı —
-    //   Firestore kuralları filtre DEĞİLDİR, sorgu kısıtı kuralı karşılamalı.
+    // create → authenticated kullanıcı, AMA sıkı şekil + şirket bütünlüğü ile:
+    //   • Sadece beklenen alanlar yazılabilir (fazladan alan enjeksiyonu yok).
+    //   • Yanıtın companyId'si, cevapladığı survey'in companyId'si ile birebir
+    //     eşleşmeli (referans verilen survey gerçekten var olmalı). Böylece bir
+    //     kullanıcı yanıtı keyfi/başka bir şirkete etiketleyip o şirketin veri
+    //     havuzunu sabote edemez. Mobil zaten companyId: survey.companyId yazıyor
+    //     (platform anketlerinde her iki tarafta da '__admin__'), o yüzden bu
+    //     kural meşru akışı bozmaz; yalnızca kötü niyetli istemciyi engeller.
+    //   NOT (eksik kalan koruma): Kullanıcı başına TEK yanıt ve userIdHash'in
+    //     çağırana ait olduğunun doğrulanması kural katmanında yapılamaz (rules
+    //     sha256 hesaplayamaz, doc'ta uid yok). Tam koruma için yanıt yazımı bir
+    //     callable Cloud Function'a taşınmalı (hash'i request.auth.uid'den türetip
+    //     mükerrer yanıtı engeller; create: if false yapılır). Ayrı PR önerilir.
+    // read   → is_admin VEYA aynı şirketin üyesi (company_id claim eşleşmesi).
+    //   Mobil artık survey_responses OKUMUYOR; "zaten cevaplandı" bilgisi
+    //   users/{uid}.answeredSurveyIds'te tutulur (yalnız sahibe açık).
     // update/delete → is_admin only
     match /survey_responses/{responseId} {
       allow read:   if isAdmin() || isCompanyMember(resource.data.companyId);
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasOnly(
+             ['surveyId', 'companyId', 'userIdHash', 'answers', 'created_at'])
+        && request.resource.data.surveyId is string
+        && request.resource.data.companyId is string
+        && request.resource.data.userIdHash is string
+        && request.resource.data.answers is map
+        && exists(/databases/$(database)/documents/surveys/$(request.resource.data.surveyId))
+        && get(/databases/$(database)/documents/surveys/$(request.resource.data.surveyId)).data.companyId
+             == request.resource.data.companyId;
       allow update, delete: if isAdmin();
     }
 
