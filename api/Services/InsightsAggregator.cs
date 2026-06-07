@@ -8,9 +8,13 @@ namespace PomApi.Services;
 public static class InsightsAggregator
 {
     // -----------------------------------------------------------------------
-    // Dimension keys expected in check-in scores
+    // Canonical dimension keys stored in each check-in's `scores` map. These
+    // must match the mobile CheckinModel + the computeInsights Cloud Function;
+    // the previous short keys ("mood"/"stress"/…) never existed in the data and
+    // made every average resolve to 0 (the dead B2B-revenue bug).
     // -----------------------------------------------------------------------
-    private static readonly string[] DimKeys = { "mood", "stress", "team", "growth", "balance" };
+    private static readonly string[] DimKeys =
+        { "overallMood", "workStress", "teamHarmony", "personalGrowth", "workLifeBalance" };
 
     // -----------------------------------------------------------------------
     // Score averaging
@@ -33,12 +37,14 @@ public static class InsightsAggregator
             return vals.Count > 0 ? vals.Average() : 0;
         }
 
+        // Output field names (Mood/Stress/…) are the public API contract; only
+        // the Firestore read keys change to the canonical camelCase vocabulary.
         return new Dimensions(
-            Mood:    Math.Round(Avg("mood"),    2),
-            Stress:  Math.Round(Avg("stress"),  2),
-            Team:    Math.Round(Avg("team"),    2),
-            Growth:  Math.Round(Avg("growth"),  2),
-            Balance: Math.Round(Avg("balance"), 2)
+            Mood:    Math.Round(Avg("overallMood"),     2),
+            Stress:  Math.Round(Avg("workStress"),      2),
+            Team:    Math.Round(Avg("teamHarmony"),     2),
+            Growth:  Math.Round(Avg("personalGrowth"),  2),
+            Balance: Math.Round(Avg("workLifeBalance"), 2)
         );
     }
 

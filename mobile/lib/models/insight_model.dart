@@ -14,7 +14,9 @@ class InsightModel {
 
   final String uid;
 
-  /// Personal dimension scores — keys match AppConstants.checkinDimensions
+  /// Personal dimension scores — keyed by the canonical camelCase dimension
+  /// keys (see [_dimensionOrder]); AppConstants.checkinDimensions holds the
+  /// matching Turkish display labels in the same order.
   final Map<String, double> personalScores;
 
   /// Company-average dimension scores (null if N < threshold)
@@ -66,30 +68,46 @@ class InsightModel {
     return _dimensionOrder.map((k) => map[k] ?? 3.0).toList();
   }
 
+  /// Parses the document written by the `computeInsights` Cloud Function, whose
+  /// shape is nested:
+  ///   { personal: { avg: {dim: score}, checkin_count, trend_slope, ... },
+  ///     company:  { avg: {...}, checkin_count } | null,
+  ///     department_stats: {...} | null,
+  ///     companyId, updated_at }
+  /// (Benchmark scores have no source here — they are fetched separately by
+  /// InsightsRepository.getBenchmarkScores.)
   factory InsightModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
 
-    Map<String, double> _parseScores(dynamic raw) {
-      if (raw == null) return {};
-      final map = raw as Map<String, dynamic>;
-      return map.map((k, v) => MapEntry(k, (v as num).toDouble()));
+    Map<String, double> avgOf(dynamic section) {
+      if (section is! Map) return {};
+      final avg = section['avg'];
+      if (avg is! Map) return {};
+      return avg.map(
+        (k, v) => MapEntry(k as String, (v as num).toDouble()),
+      );
     }
+
+    final personal = data['personal'];
+    final company = data['company'];
+
+    final trendSlope = personal is Map ? personal['trend_slope'] as num? : null;
+    final int? trend = trendSlope == null
+        ? null
+        : (trendSlope > 0.01 ? 1 : (trendSlope < -0.01 ? -1 : 0));
 
     return InsightModel(
       uid: doc.id,
-      personalScores: _parseScores(data['personalScores']),
-      companyScores: data['companyScores'] != null
-          ? _parseScores(data['companyScores'])
-          : null,
-      benchmarkScores: data['benchmarkScores'] != null
-          ? _parseScores(data['benchmarkScores'])
-          : null,
-      updatedAt: data['updatedAt'] != null
-          ? (data['updatedAt'] as Timestamp).toDate()
+      personalScores: avgOf(personal),
+      companyScores: company != null ? avgOf(company) : null,
+      benchmarkScores: null,
+      updatedAt: data['updated_at'] != null
+          ? (data['updated_at'] as Timestamp).toDate()
           : DateTime.now(),
       companyId: data['companyId'] as String?,
-      totalCheckins: data['totalCheckins'] as int? ?? 0,
-      trend: data['trend'] as int?,
+      totalCheckins:
+          personal is Map ? (personal['checkin_count'] as int? ?? 0) : 0,
+      trend: trend,
     );
   }
 
