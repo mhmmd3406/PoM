@@ -229,7 +229,7 @@ export default function BenchmarkPage() {
                   formatter={(v: number) => [`${v}`, 'Skor']}
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                 />
-                <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="score" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                   {barData.map((entry, i) => (
                     <Cell key={i} fill={entry.fill} />
                   ))}

@@ -255,7 +255,7 @@ export default function DashboardPage() {
               <Tooltip
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
               />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                 {roleData.map((entry, index) => (
                   <Cell key={index} fill={ROLE_COLORS[entry.role] ?? '#94a3b8'} />
                 ))}
