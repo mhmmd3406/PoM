@@ -14,10 +14,10 @@ interface UserDoc {
   role?: string
   companyId?: string
   department?: string
-  created_at?: Timestamp
-  updated_at?: Timestamp
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
   deleted?: boolean
-  kvkk_accepted?: boolean
+  kvkkAccepted?: boolean
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -167,9 +167,9 @@ export default function UsersPage() {
 
   const { data: users, isLoading, refetch } = useCollection<UserDoc>(
     'users',
-    // No orderBy('created_at'): Firestore's orderBy silently excludes docs that
+    // No orderBy('createdAt'): Firestore's orderBy silently excludes docs that
     // lack the field, which hid most users (F-ADM2: 34 shown vs 399 real, since
-    // older user docs have no created_at). Fetch all non-deleted users and sort
+    // older user docs have no createdAt). Fetch all non-deleted users and sort
     // client-side instead — consistent with the Dashboard count.
     [where('deleted', '==', false)],
     ['users', 'table'],
@@ -189,9 +189,9 @@ export default function UsersPage() {
           u.department?.toLowerCase().includes(q),
       )
     }
-    // Sort newest-first client-side; docs without created_at sort last.
+    // Sort newest-first client-side; docs without createdAt sort last.
     return [...list].sort(
-      (a, b) => (b.created_at?.seconds ?? 0) - (a.created_at?.seconds ?? 0),
+      (a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0),
     )
   }, [users, roleFilter, search])
 
@@ -240,23 +240,23 @@ export default function UsersPage() {
         ),
     },
     {
-      key: 'created_at',
+      key: 'createdAt',
       header: 'Oluşturulma',
       sortable: true,
-      exportValue: (u) => tsToString(u.created_at),
-      render: (u) => <span className="text-xs text-gray-500">{tsToString(u.created_at)}</span>,
+      exportValue: (u) => tsToString(u.createdAt),
+      render: (u) => <span className="text-xs text-gray-500">{tsToString(u.createdAt)}</span>,
     },
     {
-      key: 'kvkk_accepted',
+      key: 'kvkkAccepted',
       header: 'KVKK',
-      exportValue: (u) => u.kvkk_accepted ? 'Evet' : 'Hayır',
+      exportValue: (u) => u.kvkkAccepted ? 'Evet' : 'Hayır',
       render: (u) => (
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-            u.kvkk_accepted ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+            u.kvkkAccepted ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
           }`}
         >
-          {u.kvkk_accepted ? 'Evet' : 'Hayır'}
+          {u.kvkkAccepted ? 'Evet' : 'Hayır'}
         </span>
       ),
     },
