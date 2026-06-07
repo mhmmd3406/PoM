@@ -432,8 +432,13 @@ export default function PortalSurveyResultsPage() {
   // (isAdmin() || isCompanyMember(companyId)). Firestore rules are not filters,
   // so a company_admin MUST constrain the query by companyId for it to pass;
   // super_admin matches via isAdmin() and needs no companyId filter.
-  const { data: responses = [], isLoading: responsesLoading } =
-    useCollection<SurveyResponseDoc>(
+  const {
+    data: responses = [],
+    isLoading: responsesLoading,
+    isError: responsesFailed,
+    error: responsesError,
+    refetch: refetchResponses,
+  } = useCollection<SurveyResponseDoc>(
       'survey_responses',
       id
         ? (companyId
@@ -461,6 +466,39 @@ export default function PortalSurveyResultsPage() {
       <div className="text-center py-20">
         <p className="text-gray-500">Anket bulunamadı.</p>
         <button onClick={() => navigate('/portal/surveys')} className="btn-primary mt-4">Geri Dön</button>
+      </div>
+    )
+  }
+
+  // A genuine read failure (e.g. a company_id claim that doesn't match the
+  // responses' companyId) must NOT masquerade as "0 yanıt · kilitli" — that is
+  // exactly what made F-ADM7 look like "no data". Surface it instead.
+  if (responsesFailed) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6">
+        <button
+          onClick={() => navigate('/portal/surveys')}
+          className="text-gray-400 hover:text-gray-600 text-sm"
+        >
+          ← Geri
+        </button>
+        <div className="card text-center py-14">
+          <p className="text-5xl mb-4">⚠️</p>
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Yanıtlar yüklenemedi</h2>
+          <p className="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+            Anket yanıtları okunamadı. Bu genellikle bir yetki/oturum sorunudur —
+            şirket kimliğiniz (company_id) yanıtlarla eşleşmiyor olabilir. Lütfen
+            çıkış yapıp tekrar giriş yapın; sorun sürerse yöneticinize bildirin.
+          </p>
+          {responsesError instanceof Error && (
+            <p className="text-xs text-gray-400 mt-3 font-mono break-all">
+              {responsesError.message}
+            </p>
+          )}
+          <button onClick={() => void refetchResponses()} className="btn-primary mt-6">
+            Tekrar Dene
+          </button>
+        </div>
       </div>
     )
   }

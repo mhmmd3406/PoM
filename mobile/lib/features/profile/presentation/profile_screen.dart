@@ -1,15 +1,21 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../insights/providers/insights_provider.dart';
 import '../../surveys/providers/surveys_provider.dart';
+import '../data/account_repository.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -226,18 +232,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   // ── Hesap & Gizlilik ─────────────────────────────────────────
                   _SectionLabel(title: 'Hesap & Gizlilik', ink3: ink3),
                   _SettingsGroup(surface: surface, border: border, children: [
-                    _ChevronRow(label: 'KVKK Aydınlatma', desc: 'Versiyon 1.0 · Mart 2026', ink: ink, ink3: ink3, divider: divider, onTap: () {}),
-                    _ChevronRow(label: 'Gizlilik Politikası', ink: ink, ink3: ink3, divider: divider, onTap: () {}),
-                    _ChevronRow(label: 'Verilerimi dışa aktar', desc: 'JSON · son 12 hafta', ink: ink, ink3: ink3, divider: divider, onTap: () {}),
-                    _ChevronRow(label: 'Hesabımı sil', desc: 'Tüm verim kalıcı olarak silinir', ink: AppColors.rose, ink3: ink3, divider: divider, onTap: () {}, last: true),
+                    _ChevronRow(label: 'KVKK Aydınlatma', desc: 'Versiyon 1.0 · Mart 2026', ink: ink, ink3: ink3, divider: divider, onTap: () => _openUrl(AppConstants.kvkkUrl)),
+                    _ChevronRow(label: 'Gizlilik Politikası', ink: ink, ink3: ink3, divider: divider, onTap: () => _openUrl(AppConstants.privacyUrl)),
+                    _ChevronRow(label: 'Verilerimi dışa aktar', desc: 'Tüm verilerim · JSON', ink: ink, ink3: ink3, divider: divider, onTap: () => _exportMyData()),
+                    _ChevronRow(label: 'Hesabımı sil', desc: 'Tüm verim kalıcı olarak silinir', ink: AppColors.rose, ink3: ink3, divider: divider, onTap: () => _confirmAndDeleteAccount(), last: true),
                   ]),
 
                   // ── PoM Hakkında ─────────────────────────────────────────────
                   _SectionLabel(title: 'PoM Hakkında', ink3: ink3),
                   _SettingsGroup(surface: surface, border: border, children: [
                     _ChevronRow(label: 'Sürüm', desc: '2.1.0 · Mayıs 2026', ink: ink, ink3: ink3, divider: divider),
-                    _ChevronRow(label: 'Destek', ink: ink, ink3: ink3, divider: divider, onTap: () {}),
-                    _ChevronRow(label: 'Hakkımızda', ink: ink, ink3: ink3, divider: divider, onTap: () {}, last: true),
+                    _ChevronRow(label: 'Destek', ink: ink, ink3: ink3, divider: divider, onTap: () => _openUrl('mailto:${AppConstants.supportEmail}')),
+                    _ChevronRow(label: 'Hakkımızda', ink: ink, ink3: ink3, divider: divider, onTap: _showAbout, last: true),
                   ]),
 
                   const SizedBox(height: 16),
@@ -344,6 +350,116 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Navigator.of(context).pop();
         },
       ),
+    );
+  }
+
+  // ── F3: account & privacy actions ───────────────────────────────────────────
+
+  Future<void> _openUrl(String url) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final ok =
+          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Bağlantı açılamadı.')));
+      }
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Bağlantı açılamadı.')));
+      }
+    }
+  }
+
+  Future<void> _confirmAndDeleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hesabını sil'),
+        content: const Text(
+          'Hesabın kalıcı olarak silinecek ve kişisel verilerin '
+          'anonimleştirilecek. Bu işlem geri alınamaz.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.rose),
+            child: const Text('Hesabımı sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(accountRepositoryProvider).deleteAccount();
+      // Clearing local auth state makes the router redirect back to /login.
+      await ref.read(authStateNotifierProvider.notifier).signOut();
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Hesap silinemedi. Lütfen tekrar deneyin.')));
+      }
+    }
+  }
+
+  Future<void> _exportMyData() async {
+    final uid = ref.read(currentUserProvider)?.uid;
+    final messenger = ScaffoldMessenger.of(context);
+    if (uid == null) return;
+    try {
+      final data = await ref.read(accountRepositoryProvider).exportMyData(uid);
+      final json = const JsonEncoder.withIndent('  ').convert(data);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Verilerim'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(child: SelectableText(json)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: json));
+                if (ctx.mounted) Navigator.pop(ctx);
+                messenger.showSnackBar(const SnackBar(
+                    content: Text('Veriler panoya kopyalandı.')));
+              },
+              child: const Text('Kopyala'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Kapat'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Veriler dışa aktarılamadı.')));
+      }
+    }
+  }
+
+  void _showAbout() {
+    showAboutDialog(
+      context: context,
+      applicationName: 'PoM — Peace of Mind',
+      applicationVersion: '2.1.0',
+      applicationLegalese: '© 2026 PoM. Tüm hakları saklıdır.',
+      children: const [
+        SizedBox(height: 12),
+        Text('Anonim çalışan refahı ve ruh hali takip platformu.'),
+      ],
     );
   }
 }

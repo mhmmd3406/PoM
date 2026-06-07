@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useCollection, orderBy, Timestamp } from '../hooks/useFirestore'
+import { useCollection, Timestamp } from '../hooks/useFirestore'
 import { DataTable, Column } from '../components/DataTable'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -13,6 +13,8 @@ interface CompanyDoc {
   contact_email?: string
   created_at?: Timestamp
   active?: boolean
+  /** True when synthesized from users data because no companies/{id} doc exists. */
+  _derived?: boolean
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -21,6 +23,11 @@ function tsToString(ts: Timestamp | undefined): string {
   if (!ts) return '—'
   const d = ts.toDate ? ts.toDate() : new Date((ts as { seconds: number }).seconds * 1000)
   return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+/** Turn a companyId like "garanti_bbva" into a readable "Garanti Bbva". */
+function prettifyCompanyId(id: string): string {
+  return id.replace(/[_-]+/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())
 }
 
 const PLAN_BADGE: Record<string, string> = {
@@ -114,9 +121,11 @@ export default function CompaniesPage() {
   const [planFilter, setPlanFilter] = useState<string>('all')
   const [detailCompany, setDetailCompany] = useState<CompanyDoc | null>(null)
 
-  const { data: companies, isLoading } = useCollection<CompanyDoc>(
+  const { data: companyDocs, isLoading } = useCollection<CompanyDoc>(
     'companies',
-    [orderBy('created_at', 'desc')],
+    // No orderBy('created_at'): Firestore's orderBy silently excludes docs that
+    // lack the field. Sort client-side instead (see `filtered`).
+    [],
     ['companies', 'table'],
   )
 
@@ -135,14 +144,31 @@ export default function CompaniesPage() {
     return map
   }, [users])
 
+  // Merge the companies collection with company IDs that appear on user docs.
+  // Several companies exist only as a companyId on users/checkins with no
+  // companies/{id} document (F-ADM3: page showed 5/10). Synthesize entries for
+  // those so every active company is listed; they are flagged _derived so the
+  // admin can see which still need a real company record (or a backfill).
+  const companies = useMemo<CompanyDoc[]>(() => {
+    const byId = new Map<string, CompanyDoc>()
+    for (const c of companyDocs ?? []) byId.set(c.id, c)
+    for (const u of users ?? []) {
+      const cid = u.companyId
+      if (cid && !byId.has(cid)) {
+        byId.set(cid, { id: cid, name: prettifyCompanyId(cid), _derived: true })
+      }
+    }
+    return Array.from(byId.values())
+  }, [companyDocs, users])
+
   const plans = useMemo(() => {
     const set = new Set<string>()
-    for (const c of companies ?? []) if (c.plan) set.add(c.plan)
+    for (const c of companies) if (c.plan) set.add(c.plan)
     return Array.from(set)
   }, [companies])
 
   const filtered = useMemo(() => {
-    let list = companies ?? []
+    let list = companies
     if (planFilter !== 'all') list = list.filter((c) => c.plan === planFilter)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
@@ -154,7 +180,10 @@ export default function CompaniesPage() {
           c.industry?.toLowerCase().includes(q),
       )
     }
-    return list
+    // Sort by created_at desc; derived entries (no created_at) sort last.
+    return [...list].sort(
+      (a, b) => (b.created_at?.seconds ?? 0) - (a.created_at?.seconds ?? 0),
+    )
   }, [companies, planFilter, search])
 
   const columns: Column<CompanyDoc>[] = [
@@ -165,7 +194,17 @@ export default function CompaniesPage() {
       exportValue: (c) => c.name ?? c.id,
       render: (c) => (
         <div>
-          <p className="text-sm font-medium text-gray-900">{c.name ?? '—'}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium text-gray-900">{c.name ?? '—'}</p>
+            {c._derived && (
+              <span
+                className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700"
+                title="Bu şirketin Firestore companies kaydı yok — kullanıcı verisinden türetildi"
+              >
+                kayıt yok
+              </span>
+            )}
+          </div>
           <p className="text-[11px] font-mono text-gray-400">{c.id.slice(0, 8)}…</p>
         </div>
       ),
