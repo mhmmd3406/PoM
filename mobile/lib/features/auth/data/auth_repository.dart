@@ -1,8 +1,5 @@
-import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -42,10 +39,15 @@ class AuthRepository {
     }
   }
 
-  /// Exchanges the authorization code for a Firebase custom token via a
-  /// Cloud Function, then signs in to Firebase.
+  /// Exchanges the authorization code for a Firebase custom token via the
+  /// `linkedinAuth` Cloud Function, then signs in to Firebase.
+  ///
+  /// Contract with the function: it returns `customToken` (required) plus
+  /// optional, null-safe profile fields (`linkedinHash`, `displayName`,
+  /// `avatarUrl`, `email`). The hash is computed server-side with a single
+  /// secret — the client no longer re-hashes (that produced a hash that never
+  /// matched the backend's dedup key).
   Future<UserModel> signInWithLinkedInCode(String authorizationCode) async {
-    // Call the Cloud Function
     final callable = _functions.httpsCallable('linkedinAuth');
     final result = await callable.call<Map<String, dynamic>>({
       'code': authorizationCode,
@@ -54,23 +56,26 @@ class AuthRepository {
 
     final data = result.data;
     final customToken = data['customToken'] as String;
-    final linkedinId = data['linkedinId'] as String;
+    // All profile fields are optional — read null-safe so a partial payload
+    // (e.g. LinkedIn email scope not granted) never crashes sign-in.
+    final linkedinHash = data['linkedinHash'] as String? ?? '';
     final displayName = data['displayName'] as String?;
     final avatarUrl = data['avatarUrl'] as String?;
     final email = data['email'] as String?;
 
-    // Hash the LinkedIn ID for privacy
-    final linkedinHash = _hmacSha256(linkedinId);
-
-    // Sign in with the custom token
     final credential = await _auth.signInWithCustomToken(customToken);
     final uid = credential.user!.uid;
 
-    // Upsert the user document in Firestore
-    final userRef = _firestore
-        .collection(AppConstants.usersCollection)
-        .doc(uid);
-
+    // The function already created the Auth user, wallet, subscription and a
+    // server-side user doc (snake_case fields the admin portal reads). Here we
+    // only MERGE the camelCase fields the mobile UserModel reads — using
+    // merge:true so we never wipe the server's fields (e.g. `linkedin_hash`
+    // used for server-side dedup, `kvkk_accepted` read by the admin portal).
+    // NOTE: the snake_case↔camelCase split in `users` is intentional tech debt
+    // tracked for the Sprint 2 naming-unification PR; once unified the function
+    // can be the sole writer and this client merge can be dropped entirely.
+    final userRef =
+        _firestore.collection(AppConstants.usersCollection).doc(uid);
     final snapshot = await userRef.get();
     UserModel user;
 
@@ -86,15 +91,15 @@ class AuthRepository {
         creditBalance: 0,
         createdAt: DateTime.now(),
       );
-      await userRef.set(user.toFirestore());
+      await userRef.set(user.toFirestore(), SetOptions(merge: true));
     } else {
       user = UserModel.fromFirestore(snapshot);
-      // Keep profile data fresh
-      await userRef.update({
+      await userRef.set({
+        'linkedinHash': linkedinHash,
         if (displayName != null) 'displayName': displayName,
         if (avatarUrl != null) 'avatarUrl': avatarUrl,
         if (email != null) 'email': email,
-      });
+      }, SetOptions(merge: true));
     }
 
     return user;
@@ -144,18 +149,6 @@ class AuthRepository {
   // ─── Sign out ────────────────────────────────────────────────────────────────
 
   Future<void> signOut() => _auth.signOut();
-
-  // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-  String _hmacSha256(String data) {
-    // NOTE: In production the secret key should come from a secure config, not
-    // be hardcoded. This is a placeholder pattern.
-    const secret = 'pom-linkedin-hash-secret-REPLACE_ME';
-    final key = utf8.encode(secret);
-    final bytes = utf8.encode(data);
-    final hmac = Hmac(sha256, key);
-    return hmac.convert(bytes).toString();
-  }
 }
 
 // ─── Riverpod provider ───────────────────────────────────────────────────────
