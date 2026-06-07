@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../models/wallet_model.dart';
 
@@ -52,13 +51,12 @@ class WalletRepository {
     return result.data['clientSecret'] as String;
   }
 
-  /// Optimistically update balance in UI (before webhook confirmation).
-  Future<void> optimisticCreditUpdate(String uid, int addedCredits) async {
-    await _firestore
-        .collection(AppConstants.usersCollection)
-        .doc(uid)
-        .update({'creditBalance': FieldValue.increment(addedCredits)});
-  }
+  // NOTE: No client-side balance write. Credits are granted server-side by the
+  // Stripe webhook (`payment_intent.succeeded` → wallets/{uid}.credits), which
+  // is the single source of truth that [watchBalance] streams. firestore.rules
+  // also forbid client writes to `wallets` (write: if false). The previous
+  // `optimisticCreditUpdate` wrote to users/{uid}.creditBalance — a field
+  // nobody watches — so it never reflected in the UI and is removed.
 }
 
 final walletRepositoryProvider = Provider<WalletRepository>((ref) {

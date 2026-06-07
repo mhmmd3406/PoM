@@ -66,6 +66,20 @@ function hashLinkedinId(linkedinId: string, secret: string): string {
   return crypto.createHmac("sha256", secret).update(linkedinId).digest("hex");
 }
 
+/** Extract the largest available profile image URL from a LinkedIn lite profile. */
+function extractLinkedinAvatar(profile: {
+  profilePicture?: {
+    "displayImage~"?: {
+      elements?: Array<{ identifiers?: Array<{ identifier?: string }> }>;
+    };
+  };
+}): string | null {
+  const elements = profile.profilePicture?.["displayImage~"]?.elements;
+  if (!elements || elements.length === 0) return null;
+  // LinkedIn returns ascending sizes; take the last (largest).
+  return elements[elements.length - 1]?.identifiers?.[0]?.identifier ?? null;
+}
+
 /** Simple OLS slope: returns slope of y = a + b*x over integer x = 0..n-1 */
 function olsSlope(values: number[]): number {
   const n = values.length;
@@ -92,13 +106,17 @@ function avg(values: number[]): number | null {
 // ---------------------------------------------------------------------------
 
 export const linkedinAuth = onCall(
-  async (request: CallableRequest<{ code: string; codeVerifier: string }>) => {
-    const { code, codeVerifier } = request.data;
-    if (!code || !codeVerifier) {
-      throw new HttpsError("invalid-argument", "code and codeVerifier are required");
+  async (request: CallableRequest<{ code: string; redirectUri?: string }>) => {
+    const { code, redirectUri } = request.data;
+    if (!code) {
+      throw new HttpsError("invalid-argument", "code is required");
     }
 
     const cfg = linkedinConfig();
+    // Confidential-client (server-side) auth-code exchange uses client_secret,
+    // not PKCE. The redirect_uri must match the one the app used to obtain the
+    // code; fall back to the configured default if the client omits it.
+    const effectiveRedirectUri = redirectUri ?? cfg.redirectUri;
 
     // Exchange authorisation code for access token
     let accessToken: string;
@@ -108,10 +126,9 @@ export const linkedinAuth = onCall(
         new URLSearchParams({
           grant_type: "authorization_code",
           code,
-          redirect_uri: cfg.redirectUri,
+          redirect_uri: effectiveRedirectUri,
           client_id: cfg.clientId,
           client_secret: cfg.clientSecret,
-          code_verifier: codeVerifier,
         }),
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       );
@@ -126,7 +143,11 @@ export const linkedinAuth = onCall(
       id: string;
       localizedFirstName: string;
       localizedLastName: string;
-      profilePicture?: { displayImage: string };
+      profilePicture?: {
+        "displayImage~"?: {
+          elements?: Array<{ identifiers?: Array<{ identifier?: string }> }>;
+        };
+      };
     };
     try {
       const profileResp = await axios.get(
@@ -137,6 +158,23 @@ export const linkedinAuth = onCall(
     } catch (err: unknown) {
       logger.error("LinkedIn profile fetch failed", err);
       throw new HttpsError("unauthenticated", "Could not fetch LinkedIn profile");
+    }
+
+    const displayName = `${profile.localizedFirstName} ${profile.localizedLastName}`;
+    const avatarUrl = extractLinkedinAvatar(profile);
+
+    // Best-effort email — requires the r_emailaddress scope. If it is not
+    // granted the request 401s; we swallow it and return null rather than
+    // failing the whole sign-in.
+    let email: string | null = null;
+    try {
+      const emailResp = await axios.get(
+        "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))",
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      email = emailResp.data?.elements?.[0]?.["handle~"]?.emailAddress ?? null;
+    } catch {
+      logger.info("LinkedIn email unavailable (scope not granted)");
     }
 
     const linkedinHash = hashLinkedinId(profile.id, cfg.hmacSecret);
@@ -159,7 +197,7 @@ export const linkedinAuth = onCall(
     } else {
       // New user — create Firebase Auth user
       const authUser = await admin.auth().createUser({
-        displayName: `${profile.localizedFirstName} ${profile.localizedLastName}`,
+        displayName,
       });
       uid = authUser.uid;
       isNewUser = true;
@@ -171,10 +209,11 @@ export const linkedinAuth = onCall(
       batch.set(db.collection("users").doc(uid), {
         uid,
         linkedin_hash: linkedinHash,
-        displayName: `${profile.localizedFirstName} ${profile.localizedLastName}`,
+        displayName,
         firstName: profile.localizedFirstName,
         lastName: profile.localizedLastName,
-        avatar: null,
+        avatar: avatarUrl,
+        email: email,
         role: "free",
         companyId: null,
         department: null,
@@ -224,7 +263,10 @@ export const linkedinAuth = onCall(
       linkedin_hash: linkedinHash,
     });
 
-    return { customToken, isNewUser };
+    // Return the custom token plus the profile fields the mobile client needs
+    // to render immediately. `linkedinHash` is the server-computed dedup key so
+    // the client never re-hashes with a divergent secret.
+    return { customToken, isNewUser, linkedinHash, displayName, avatarUrl, email };
   }
 );
 

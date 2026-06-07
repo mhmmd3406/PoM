@@ -53,13 +53,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
 
       await Stripe.instance.presentPaymentSheet();
 
-      await repo.optimisticCreditUpdate(user.uid, credits);
-
+      // Credits are granted server-side by the Stripe webhook and arrive via
+      // the wallets/{uid}.credits stream ([watchBalance]) within a few seconds.
+      // No optimistic client write (forbidden by rules; was a no-op anyway).
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '$credits kredi başarıyla eklendi!',
+              'Ödeme başarılı! $credits kredi birkaç saniye içinde hesabınıza yansıyacak.',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             backgroundColor: AppColors.sage,
