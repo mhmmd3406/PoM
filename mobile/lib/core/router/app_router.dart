@@ -13,8 +13,10 @@ import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/subscription/presentation/subscription_screen.dart';
+import '../../features/surveys/presentation/gate_survey_screen.dart';
 import '../../features/surveys/presentation/survey_answer_screen.dart';
 import '../../features/surveys/presentation/surveys_screen.dart';
+import '../../features/surveys/providers/gate_survey_notifier.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
 import '../widgets/connection_error_widget.dart';
 import '../widgets/pro_gate.dart';
@@ -24,6 +26,7 @@ class AppRoutes {
   static const onboarding   = '/onboarding';
   static const login        = '/login';
   static const kvkk         = '/kvkk';
+  static const gateSurvey   = '/gate-survey';
   static const checkin      = '/checkin';
   static const insights     = '/insights';
   static const surveys      = '/surveys';
@@ -34,14 +37,21 @@ class AppRoutes {
   static const reports       = '/reports';
   static const surveyAnswer  = '/survey/:id/answer';
   static const surveyLock    = '/survey/:id/lock';
+
+  // Routes the gate survey intercepts when the survey is mandatory.
+  static const _gatedRoutes = {
+    home, checkin, insights, surveys, profile,
+    wallet, subscription, benchmarking, reports,
+  };
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = ref.watch(authStateNotifierProvider.notifier);
+  final gateSurveyNotifier = ref.watch(gateSurveyNotifierProvider.notifier);
 
   return GoRouter(
     initialLocation: AppRoutes.onboarding,
-    refreshListenable: authNotifier,
+    refreshListenable: Listenable.merge([authNotifier, gateSurveyNotifier]),
     redirect: (BuildContext context, GoRouterState state) {
       final authState = ref.read(authStateNotifierProvider);
       if (authState.isLoading) return null;
@@ -58,6 +68,20 @@ final routerProvider = Provider<GoRouter>((ref) {
           AppRoutes.kvkk,
         ];
         if (authScreens.contains(loc)) return AppRoutes.home;
+
+        // Gate survey intercept — never redirect away from the gate itself.
+        if (loc != AppRoutes.gateSurvey) {
+          final gs = ref.read(gateSurveyNotifierProvider);
+          if (!gs.isLoading && gs.shouldShow) {
+            final isMandatory = gs.pendingSurvey?.isMandatory ?? false;
+            // Mandatory: block all app screens. Non-mandatory: block only home.
+            if (isMandatory
+                ? AppRoutes._gatedRoutes.contains(loc)
+                : loc == AppRoutes.home) {
+              return AppRoutes.gateSurvey;
+            }
+          }
+        }
         return null;
       }
 
@@ -92,6 +116,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.kvkk,
         builder: (context, state) => const KvkkScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.gateSurvey,
+        builder: (context, state) => const GateSurveyScreen(),
       ),
       GoRoute(
         path: AppRoutes.checkin,

@@ -10,9 +10,25 @@ import '../providers/surveys_provider.dart';
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
 class SurveyAnswerScreen extends ConsumerStatefulWidget {
-  const SurveyAnswerScreen({super.key, required this.surveyId});
+  const SurveyAnswerScreen({
+    super.key,
+    required this.surveyId,
+    this.canClose = true,
+    this.showSkip = false,
+    this.onSkip,
+  });
 
   final String surveyId;
+
+  /// Whether the top-right close (X) is shown. Gate surveys in mandatory mode
+  /// set this false so the screen cannot be dismissed without completing.
+  final bool canClose;
+
+  /// Whether an "Atla" (skip) action is shown instead of the close (X).
+  final bool showSkip;
+
+  /// Invoked when the user taps "Atla". Falls back to a safe close if null.
+  final VoidCallback? onSkip;
 
   @override
   ConsumerState<SurveyAnswerScreen> createState() =>
@@ -137,6 +153,16 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
     if (_step > 0) setState(() => _step--);
   }
 
+  /// Pops if there is a route to pop, otherwise routes home — safe for both the
+  /// pushed /survey/:id/answer route and the gate intercept (which uses go()).
+  void _safeClose() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return switch (_loadState) {
@@ -231,10 +257,24 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: () => context.pop(),
-                  child: Icon(Icons.close_rounded, size: 20, color: ink3),
-                ),
+                if (widget.showSkip)
+                  TextButton(
+                    onPressed: widget.onSkip ?? _safeClose,
+                    style: TextButton.styleFrom(
+                      foregroundColor: ink3,
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    child: const Text('Atla'),
+                  )
+                else if (widget.canClose)
+                  GestureDetector(
+                    onTap: _safeClose,
+                    child:
+                        Icon(Icons.close_rounded, size: 20, color: ink3),
+                  )
+                else
+                  const SizedBox(width: 20),
               ],
             ),
           ),
