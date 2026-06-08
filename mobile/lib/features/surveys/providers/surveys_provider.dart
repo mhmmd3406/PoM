@@ -53,6 +53,16 @@ final completedSurveysProvider = Provider<AsyncValue<List<SurveyModel>>>((ref) {
   });
 });
 
+// First active gate survey the current user hasn't responded to (null if none).
+// Reuses pendingSurveysProvider so the "already answered" source of truth stays
+// the user document's answeredSurveyIds (no survey_responses read).
+final pendingGateSurveyProvider = Provider<AsyncValue<SurveyModel?>>((ref) {
+  return ref.watch(pendingSurveysProvider).whenData((list) {
+    final gates = list.where((s) => s.isGate);
+    return gates.isEmpty ? null : gates.first;
+  });
+});
+
 // Single survey by Firestore document ID.
 final surveyByIdProvider =
     FutureProvider.family<SurveyModel?, String>((ref, id) {

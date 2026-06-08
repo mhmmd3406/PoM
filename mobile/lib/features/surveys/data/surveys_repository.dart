@@ -44,10 +44,15 @@ class SurveysRepository {
     required String? uid,
     required Map<String, dynamic> answers,
   }) async {
-    final batch = _db.batch();
+    // NOT an atomic batch on purpose. The response write is the only critical,
+    // always-permitted operation; the two follow-ups can legitimately be denied
+    // (e.g. the users/{uid} write when uid != the caller's auth uid in
+    // debug-bypass) and must NOT roll back the saved response.
 
-    final responseRef = _db.collection('survey_responses').doc();
-    batch.set(responseRef, {
+    // 1) Critical: the pseudonymous response. Keys must EXACTLY match the
+    //    firestore.rules create allow-list (surveyId, companyId, userIdHash,
+    //    answers, created_at) — any extra key fails the rule.
+    await _db.collection('survey_responses').add({
       'surveyId': surveyId,
       'companyId': companyId,
       'userIdHash': userIdHash,
@@ -55,24 +60,26 @@ class SurveysRepository {
       'created_at': FieldValue.serverTimestamp(),
     });
 
-    // Increment response count on the survey document.
-    batch.update(_db.collection('surveys').doc(surveyId), {
-      'responseCount': FieldValue.increment(1),
-    });
+    // 2) Best-effort: bump the survey's response counter (rules cap authed
+    //    users to a +1 increment). Non-fatal.
+    try {
+      await _db.collection('surveys').doc(surveyId).update({
+        'responseCount': FieldValue.increment(1),
+      });
+    } catch (_) {/* non-fatal */}
 
-    // Record the survey as answered on the user's own doc (owner-writable) —
-    // the app's source of truth for "already answered".
+    // 3) Best-effort: record "answered" on the user's own doc (owner-writable).
+    //    Only succeeds when uid == the caller's auth uid (real LinkedIn user);
+    //    denied in debug-bypass (test uid != anonymous session uid). Non-fatal —
+    //    the response is already saved.
     if (uid != null) {
-      batch.set(
-        _db.collection('users').doc(uid),
-        {
-          'answeredSurveyIds': FieldValue.arrayUnion([surveyId]),
-        },
-        SetOptions(merge: true),
-      );
+      try {
+        await _db.collection('users').doc(uid).set(
+          {'answeredSurveyIds': FieldValue.arrayUnion([surveyId])},
+          SetOptions(merge: true),
+        );
+      } catch (_) {/* non-fatal */}
     }
-
-    await batch.commit();
   }
 }
 

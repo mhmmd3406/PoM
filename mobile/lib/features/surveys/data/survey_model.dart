@@ -29,6 +29,9 @@ class SurveyQuestion {
     required this.text,
     required this.type,
     this.hint = '',
+    this.category = '',
+    this.reverseScore = false,
+    this.isEnps = false,
   });
 
   final String id;
@@ -36,11 +39,24 @@ class SurveyQuestion {
   final SurveyQuestionType type;
   final String hint;
 
+  // Groups this question into a named category for aggregate scoring.
+  final String category;
+
+  // For yesno/trueFalse: Evet=1, Hayır=5 when true (negatively-framed questions,
+  // e.g. "Mobbing yaşadınız mı?"). Default false → Evet=5, Hayır=1.
+  final bool reverseScore;
+
+  // Marks the designated eNPS question (must be scale10, 0–10).
+  final bool isEnps;
+
   factory SurveyQuestion.fromMap(Map<String, dynamic> m) => SurveyQuestion(
         id: m['id'] as String? ?? '',
         text: m['text'] as String? ?? '',
         type: SurveyQuestionTypeX.fromString(m['type'] as String? ?? ''),
         hint: m['hint'] as String? ?? '',
+        category: m['category'] as String? ?? '',
+        reverseScore: m['reverseScore'] as bool? ?? false,
+        isEnps: m['isEnps'] as bool? ?? false,
       );
 }
 
@@ -55,6 +71,8 @@ class SurveyModel {
     required this.questions,
     required this.minNThreshold,
     required this.responseCount,
+    this.isGate = false,
+    this.isMandatory = false,
     this.deadline,
     this.createdAt,
   });
@@ -69,6 +87,14 @@ class SurveyModel {
   final List<SurveyQuestion> questions;
   final int minNThreshold;
   final int responseCount;
+
+  // Shown to users as a full-screen gate on app launch until completed/skipped.
+  final bool isGate;
+
+  // When true the skip button is hidden; users must complete before accessing
+  // the app. When false the gate is dismissible ("Atla").
+  final bool isMandatory;
+
   final DateTime? deadline;
   final DateTime? createdAt;
 
@@ -89,6 +115,8 @@ class SurveyModel {
           .toList(),
       minNThreshold: d['minNThreshold'] as int? ?? 5,
       responseCount: d['responseCount'] as int? ?? 0,
+      isGate: d['isGate'] as bool? ?? false,
+      isMandatory: d['isMandatory'] as bool? ?? false,
       deadline: d['deadline'] != null
           ? (d['deadline'] as Timestamp).toDate()
           : null,

@@ -10,9 +10,25 @@ import '../providers/surveys_provider.dart';
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
 class SurveyAnswerScreen extends ConsumerStatefulWidget {
-  const SurveyAnswerScreen({super.key, required this.surveyId});
+  const SurveyAnswerScreen({
+    super.key,
+    required this.surveyId,
+    this.canClose = true,
+    this.showSkip = false,
+    this.onSkip,
+  });
 
   final String surveyId;
+
+  /// Whether the top-right close (X) is shown. Gate surveys in mandatory mode
+  /// set this false so the screen cannot be dismissed without completing.
+  final bool canClose;
+
+  /// Whether an "Atla" (skip) action is shown instead of the close (X).
+  final bool showSkip;
+
+  /// Invoked when the user taps "Atla". Falls back to a safe close if null.
+  final VoidCallback? onSkip;
 
   @override
   ConsumerState<SurveyAnswerScreen> createState() =>
@@ -137,6 +153,16 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
     if (_step > 0) setState(() => _step--);
   }
 
+  /// Pops if there is a route to pop, otherwise routes home — safe for both the
+  /// pushed /survey/:id/answer route and the gate intercept (which uses go()).
+  void _safeClose() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return switch (_loadState) {
@@ -182,101 +208,91 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
     final sourceLabel =
         survey.isAdminSurvey ? 'PoM Platform' : 'Şirketiniz';
 
+    // NOTE: This screen is built entirely inside `body` with custom
+    // (GestureDetector) buttons and a FractionallySizedBox progress bar —
+    // NOT Scaffold.appBar/bottomNavigationBar with Material buttons. On this
+    // Flutter version a Material ButtonStyleButton (or LinearProgressIndicator)
+    // placed as a non-flex sibling to an Expanded silently aborts the parent
+    // layout, leaving the whole question body blank. See project notes.
     return Scaffold(
       backgroundColor: bg,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(64),
-        child: AppBar(
-          backgroundColor: bg,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          titleSpacing: 0,
-          title: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: _back,
-                  child: Icon(Icons.arrow_back_rounded, size: 22, color: ink2),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'SORU ${_step + 1} / $total  •  ${(progress * 100).round()}%',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: ink3,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 4,
-                          backgroundColor: isDark
-                              ? AppColors.darkBgAlt
-                              : AppColors.lightBgAlt,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppColors.blue),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: () => context.pop(),
-                  child: Icon(Icons.close_rounded, size: 20, color: ink3),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton.icon(
-                onPressed: _step > 0 ? _back : null,
-                icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                label: const Text('Geri'),
-                style: TextButton.styleFrom(foregroundColor: ink2),
-              ),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: answered != null ? _next : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(
-                    isLast ? 'Gönder' : 'İleri →',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Header (custom) ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _back,
+                    child: Icon(Icons.arrow_back_rounded, size: 22, color: ink2),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'SORU ${_step + 1} / $total  •  ${(progress * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: ink3,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: Container(
+                            height: 4,
+                            color: isDark
+                                ? AppColors.darkBgAlt
+                                : AppColors.lightBgAlt,
+                            child: FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: progress,
+                              child: Container(color: AppColors.blue),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  if (widget.showSkip)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: widget.onSkip ?? _safeClose,
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text('Atla',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: ink3)),
+                      ),
+                    )
+                  else if (widget.canClose)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _safeClose,
+                      child: Icon(Icons.close_rounded, size: 20, color: ink3),
+                    )
+                  else
+                    const SizedBox(width: 20),
+                ],
+              ),
+            ),
+
+            // ── Scrollable content ──
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                children: [
             // Survey label + anon note
             Row(
               children: [
@@ -338,6 +354,64 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
 
             // Input widget based on question type
             _buildInput(q, answered, isDark, border, ink, ink2, ink3),
+                ],
+              ),
+            ),
+
+            // ── Bottom bar (custom buttons) ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _step > 0 ? _back : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.arrow_back_rounded,
+                              size: 16, color: _step > 0 ? ink2 : ink3),
+                          const SizedBox(width: 4),
+                          Text('Geri',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _step > 0 ? ink2 : ink3)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: answered != null ? _next : null,
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: answered != null
+                            ? AppColors.blue
+                            : (isDark
+                                ? AppColors.darkBgAlt
+                                : AppColors.lightBgAlt),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        isLast ? 'Gönder' : 'İleri →',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: answered != null ? Colors.white : ink3),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
