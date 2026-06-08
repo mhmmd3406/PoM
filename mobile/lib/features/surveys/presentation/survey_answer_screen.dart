@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../providers/surveys_provider.dart';
@@ -93,22 +92,6 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
     if (survey == null) return;
 
     setState(() => _loadState = _LoadState.submitting);
-
-    // Debug-bypass: the in-memory test user's uid is not the (anonymous) Firebase
-    // session uid, so submitResponse's users/{uid}.answeredSurveyIds write is
-    // denied and the batch fails. Simulate success locally — same approach as the
-    // check-in flow — so the survey/gate is fully demoable without a real account.
-    if (kDebugMode && AppConstants.debugBypassAuth) {
-      if (user != null && !user.answeredSurveyIds.contains(survey.id)) {
-        ref.read(authStateNotifierProvider.notifier).refreshUser(
-              user.copyWith(
-                answeredSurveyIds: [...user.answeredSurveyIds, survey.id],
-              ),
-            );
-      }
-      if (mounted) setState(() => _loadState = _LoadState.done);
-      return;
-    }
 
     try {
       final repo = ref.read(surveysRepositoryProvider);
