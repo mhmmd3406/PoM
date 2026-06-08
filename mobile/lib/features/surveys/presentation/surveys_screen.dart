@@ -373,7 +373,7 @@ class _SurveyCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: isDone
-            ? null
+            ? () => context.push('/survey/${survey.id}/result')
             : () => context.push('/survey/${survey.id}/answer'),
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -453,7 +453,7 @@ class _SurveyCard extends StatelessWidget {
                   const Spacer(),
                   Text(
                     isDone
-                        ? 'Tamamlandı ✓'
+                        ? 'Sonuçları gör →'
                         : survey.deadline != null
                             ? '${_deadlineLabel()}\'a kadar'
                             : 'Süresiz',

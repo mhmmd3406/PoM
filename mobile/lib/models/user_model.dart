@@ -19,6 +19,7 @@ class UserModel {
     this.createdAt,
     this.lastCheckinAt,
     this.answeredSurveyIds = const [],
+    this.surveyAnswers = const {},
   });
 
   final String uid;
@@ -50,6 +51,12 @@ class UserModel {
   /// firestore.rules restrict to admins / company members.
   final List<String> answeredSurveyIds;
 
+  /// This user's OWN survey answers, keyed by surveyId → (questionId → answer).
+  /// Persisted on the owner-readable user doc at submit time so the personal
+  /// result view can be re-rendered later without reading `survey_responses`
+  /// (which firestore.rules block for non-admins/non-members).
+  final Map<String, Map<String, dynamic>> surveyAnswers;
+
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return UserModel(
@@ -80,6 +87,13 @@ class UserModel {
                   ?.map((e) => e as String)
                   .toList() ??
               const [],
+      surveyAnswers: (data['surveyAnswers'] as Map<String, dynamic>?)?.map(
+            (surveyId, answers) => MapEntry(
+              surveyId,
+              Map<String, dynamic>.from(answers as Map),
+            ),
+          ) ??
+          const {},
     );
   }
 
@@ -123,6 +137,7 @@ class UserModel {
     DateTime? createdAt,
     DateTime? lastCheckinAt,
     List<String>? answeredSurveyIds,
+    Map<String, Map<String, dynamic>>? surveyAnswers,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -142,6 +157,7 @@ class UserModel {
       createdAt: createdAt ?? this.createdAt,
       lastCheckinAt: lastCheckinAt ?? this.lastCheckinAt,
       answeredSurveyIds: answeredSurveyIds ?? this.answeredSurveyIds,
+      surveyAnswers: surveyAnswers ?? this.surveyAnswers,
     );
   }
 

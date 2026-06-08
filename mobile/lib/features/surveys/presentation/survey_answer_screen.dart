@@ -99,12 +99,20 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
       );
 
       // Reflect the answer in the in-memory user model immediately so the
-      // survey lists + the already-answered guard update without a re-read
-      // (currentUserProvider is loaded once at sign-in, not streamed).
-      if (user != null && !user.answeredSurveyIds.contains(survey.id)) {
+      // survey lists, the already-answered guard, and the personal result view
+      // update without a re-read (currentUserProvider is loaded once at sign-in,
+      // not streamed).
+      if (user != null) {
         ref.read(authStateNotifierProvider.notifier).refreshUser(
               user.copyWith(
-                answeredSurveyIds: [...user.answeredSurveyIds, survey.id],
+                answeredSurveyIds:
+                    user.answeredSurveyIds.contains(survey.id)
+                        ? user.answeredSurveyIds
+                        : [...user.answeredSurveyIds, survey.id],
+                surveyAnswers: {
+                  ...user.surveyAnswers,
+                  survey.id: answersMap,
+                },
               ),
             );
       }
@@ -148,6 +156,9 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
       _LoadState.done => _ThankYouScreen(
           survey: _survey,
           onHome: () => context.go('/'),
+          onViewResults: _survey != null
+              ? () => context.pushReplacement('/survey/${_survey!.id}/result')
+              : null,
         ),
       _LoadState.alreadyAnswered => _AlreadyAnsweredScreen(
           onHome: () => context.go('/'),
@@ -558,9 +569,14 @@ class _AlreadyAnsweredScreen extends StatelessWidget {
 // ─── Thank you screen ─────────────────────────────────────────────────────────
 
 class _ThankYouScreen extends StatelessWidget {
-  const _ThankYouScreen({required this.survey, required this.onHome});
+  const _ThankYouScreen({
+    required this.survey,
+    required this.onHome,
+    this.onViewResults,
+  });
   final SurveyModel? survey;
   final VoidCallback onHome;
+  final VoidCallback? onViewResults;
 
   @override
   Widget build(BuildContext context) {
@@ -629,20 +645,52 @@ class _ThankYouScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: onHome,
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                if (onViewResults != null) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: onViewResults,
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('Kişisel Sonuçlarını Gör',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
-                    child: const Text('Ana Sayfa',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700)),
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton(
+                      onPressed: onHome,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: ink2,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('Ana Sayfa',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ] else
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: onHome,
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('Ana Sayfa',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
               ],
             ),
           ),

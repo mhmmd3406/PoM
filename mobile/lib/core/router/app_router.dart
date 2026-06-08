@@ -14,6 +14,7 @@ import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/subscription/presentation/subscription_screen.dart';
 import '../../features/surveys/presentation/survey_answer_screen.dart';
+import '../../features/surveys/presentation/survey_result_screen.dart';
 import '../../features/surveys/presentation/surveys_screen.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
 import '../widgets/connection_error_widget.dart';
@@ -33,6 +34,7 @@ class AppRoutes {
   static const benchmarking  = '/benchmarking';
   static const reports       = '/reports';
   static const surveyAnswer  = '/survey/:id/answer';
+  static const surveyResult  = '/survey/:id/result';
   static const surveyLock    = '/survey/:id/lock';
 }
 
@@ -161,6 +163,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.surveyAnswer,
         builder: (context, state) => SurveyAnswerScreen(
+          surveyId: state.pathParameters['id'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.surveyResult,
+        builder: (context, state) => SurveyResultScreen(
           surveyId: state.pathParameters['id'] ?? '',
         ),
       ),

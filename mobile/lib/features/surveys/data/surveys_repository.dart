@@ -61,12 +61,16 @@ class SurveysRepository {
     });
 
     // Record the survey as answered on the user's own doc (owner-writable) —
-    // the app's source of truth for "already answered".
+    // the app's source of truth for "already answered". Also persist this
+    // user's OWN answers under surveyAnswers.<surveyId> so the personal result
+    // view can be re-rendered later without reading `survey_responses` (which
+    // firestore.rules restrict to admins / company members).
     if (uid != null) {
       batch.set(
         _db.collection('users').doc(uid),
         {
           'answeredSurveyIds': FieldValue.arrayUnion([surveyId]),
+          'surveyAnswers': {surveyId: answers},
         },
         SetOptions(merge: true),
       );
