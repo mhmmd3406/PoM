@@ -244,7 +244,13 @@ async function main() {
   console.log(`   zorunlu  : ${wantMandatory}\n`);
 }
 
-main().catch(err => {
-  console.error('\n❌ Hata:', err.message ?? err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('\n❌ Hata:', err.message ?? err);
+    process.exit(1);
+  });
+}
+
+// Exported so other tooling (e.g. a no-service-account REST prod seeder) can
+// reuse the exact question set without duplicating it.
+module.exports = { QUESTIONS, q };
