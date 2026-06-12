@@ -46,7 +46,12 @@ const DB = `projects/${PROJECT_ID}/databases/(default)`;
 const ARGV = process.argv.slice(2);
 const MODE = ARGV.includes('--apply') ? 'apply'
   : ARGV.includes('--purge') ? 'purge'
-  : ARGV.includes('--verify') ? 'verify' : 'plan';
+  : ARGV.includes('--verify') ? 'verify'
+  // --write-aggregates: produce survey_aggregates docs in the EXACT shape the
+  // computeSurveyAggregate Cloud Function writes (functions/src/index.ts). Used
+  // to unblock mobile dev while the CF deploy is blocked on billing; the CF then
+  // refreshes the same docs on schedule once billing is restored.
+  : ARGV.includes('--write-aggregates') ? 'aggregates' : 'plan';
 
 const COMPANY_MIN_N = 15;
 const DEPT_MIN_N = 10;
@@ -263,6 +268,82 @@ function buildAnswers(questions, target) {
       const top = catMeans[0], bot = catMeans[catMeans.length - 1];
       console.log(`  ✓ ${k}  n=${g.n}  genel=${overall.toFixed(2)}  eNPS=${enpsScore(g.enps)}  ↑${top[0]} ${top[1].toFixed(1)}  ↓${bot[0]} ${bot[1].toFixed(1)}`);
     }
+    return;
+  }
+
+  // ── WRITE-AGGREGATES (mirror of computeSurveyAggregate CF doc shape) ───────
+  if (MODE === 'aggregates') {
+    const sres1 = await req('GET', 'firestore.googleapis.com',
+      `/v1/${DB}/documents/surveys/${SURVEY_ID}`, { Authorization: `Bearer ${tok}` });
+    const questions1 = (fromVal({ mapValue: { fields: sres1.body.fields } }).questions || []).filter(Boolean);
+    const enpsQ1 = questions1.find(q => q.isEnps && q.type === 'scale10');
+    const users1 = (await listAll(tok, 'users')).filter(u => u.f.companyId && !u.f.deleted);
+    const hashToUser1 = new Map();
+    for (const u of users1) hashToUser1.set(sha256(u.id), { companyId: u.f.companyId, department: u.f.department || '(belirsiz)' });
+    const companies1 = await listAll(tok, 'companies');
+    const industryOf = new Map(companies1.map(c => [c.id, c.f.industry || 'Diğer']));
+    const resps1 = await runQuery(tok, { structuredQuery: {
+      from: [{ collectionId: 'survey_responses' }],
+      where: { fieldFilter: { field: { fieldPath: 'surveyId' }, op: 'EQUAL', value: { stringValue: SURVEY_ID } } } } });
+
+    const norm = (a, type, rev) => {
+      if (a == null) return null;
+      if (type === 'emoji5') return typeof a === 'number' ? a + 1 : null;
+      if (type === 'scale5') return typeof a === 'number' ? a : null;
+      if (type === 'scale10') return typeof a === 'number' ? (a / 10) * 4 + 1 : null;
+      if (type === 'yesno' || type === 'trueFalse') return typeof a === 'boolean' ? (a ? (rev ? 1 : 5) : (rev ? 5 : 1)) : null;
+      return null;
+    };
+    const newAcc = () => ({ n: 0, cat: {}, enps: [] });
+    const accInto = (acc, answers) => {
+      acc.n++;
+      for (const q of questions1) {
+        if (!q.category || q.type === 'text') continue;
+        const v = norm(answers[q.id], q.type, q.reverseScore);
+        if (v != null) (acc.cat[q.category] = acc.cat[q.category] || []).push(v);
+      }
+      if (enpsQ1 && typeof answers[enpsQ1.id] === 'number') acc.enps.push(answers[enpsQ1.id]);
+    };
+    const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+    const r2 = n => Math.round(n * 100) / 100;
+    const enpsScore = a => a.length ? Math.round((a.filter(x => x >= 9).length / a.length) * 100 - (a.filter(x => x <= 6).length / a.length) * 100) : null;
+    const summarize = (acc, minN) => {
+      if (acc.n < minN) return { n: acc.n, locked: true, overall: null, categories: {}, enps: null };
+      const categories = {};
+      for (const [c, vals] of Object.entries(acc.cat)) if (vals.length) categories[c] = r2(mean(vals));
+      const cv = Object.values(categories);
+      return { n: acc.n, locked: false, overall: cv.length ? r2(cv.reduce((s, v) => s + v, 0) / cv.length) : null, categories, enps: enpsScore(acc.enps) };
+    };
+
+    const companyAcc = {}, deptAcc = {}, sectorAcc = {};
+    for (const r of resps1) {
+      const g = hashToUser1.get(r.f.userIdHash);
+      if (!g) continue;
+      const ind = industryOf.get(g.companyId) || 'Diğer';
+      (companyAcc[g.companyId] = companyAcc[g.companyId] || newAcc()); accInto(companyAcc[g.companyId], r.f.answers);
+      (deptAcc[g.companyId] = deptAcc[g.companyId] || {});
+      (deptAcc[g.companyId][g.department] = deptAcc[g.companyId][g.department] || newAcc()); accInto(deptAcc[g.companyId][g.department], r.f.answers);
+      (sectorAcc[ind] = sectorAcc[ind] || Object.assign(newAcc(), { companies: new Set() })); accInto(sectorAcc[ind], r.f.answers); sectorAcc[ind].companies.add(g.companyId);
+    }
+
+    const writes = [];
+    for (const companyId of Object.keys(companyAcc)) {
+      const ind = industryOf.get(companyId) || 'Diğer';
+      const sa = sectorAcc[ind];
+      const departments = {};
+      for (const [d, acc] of Object.entries(deptAcc[companyId] || {})) departments[d] = summarize(acc, DEPT_MIN_N);
+      const sector = sa ? Object.assign({ industry: ind, nCompanies: sa.companies.size }, summarize(sa, COMPANY_MIN_N)) : null;
+      writes.push({ update: { name: `${DB}/documents/survey_aggregates/${SURVEY_ID}__${companyId}`,
+        fields: toVal({
+          surveyId: SURVEY_ID, companyId, companyMinN: COMPANY_MIN_N, departmentMinN: DEPT_MIN_N,
+          company: summarize(companyAcc[companyId], COMPANY_MIN_N), departments, sector,
+          updatedAt: new Date(), seed: true,
+        }).mapValue.fields } });
+    }
+    console.log(`[aggregates] ${writes.length} survey_aggregates doc yazılıyor (CF doc şekli)…`);
+    await commit(tok, writes);
+    const visible = Object.keys(companyAcc).filter(c => companyAcc[c].n >= COMPANY_MIN_N);
+    console.log(`[aggregates] tamam. min-N geçen şirket: ${visible.length} (${visible.join(', ')}).`);
     return;
   }
 
