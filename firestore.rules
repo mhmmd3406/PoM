@@ -26,6 +26,12 @@ service cloud.firestore {
     function myUserIdHash() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userIdHash;
     }
+    // The caller's own companyId, read from their user doc. Mobile users carry
+    // companyId on the user doc (not as a token claim), so survey_aggregates
+    // access is bridged via get() rather than the company_id claim.
+    function myCompanyId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId;
+    }
 
     // ── users ────────────────────────────────────────────────────────────────
     match /users/{userId} {
@@ -158,6 +164,17 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/surveys/$(request.resource.data.surveyId)).data.companyId
              == request.resource.data.companyId;
       allow update, delete: if isAdmin();
+    }
+
+    // ── survey_aggregates (Cloud Functions only) ──────────────────────────────
+    // computeSurveyAggregate yazar; min-N korumalı, anonim grup ortalamaları.
+    // Doc id = '{surveyId}__{companyId}'. read → o şirketin üyesi (kullanıcının
+    // user doc'undaki companyId) VEYA admin. Bir şirket başka şirketin skorunu
+    // GÖREMEZ; sektör bloğu doc içinde denormalize (anonim cross-company benchmark).
+    match /survey_aggregates/{aggId} {
+      allow read:  if isAdmin() || (isAuthenticated()
+                       && resource.data.companyId == myCompanyId());
+      allow write: if false; // yalnız Cloud Functions (Admin SDK kuralları bypass eder)
     }
 
     // ── platform yönetim koleksiyonları (admin panel) ─────────────────────────
