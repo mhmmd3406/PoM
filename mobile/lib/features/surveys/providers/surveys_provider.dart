@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/firebase_providers.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../data/survey_aggregate.dart';
 import '../data/survey_model.dart';
 import '../data/survey_scoring.dart';
 import '../data/surveys_repository.dart';
@@ -124,4 +126,21 @@ final experienceResultProvider = Provider<ExperienceResult?>((ref) {
     categories: categories,
     enps: enps,
   );
+});
+
+// ─── Survey aggregate (company / department / sector — Cloud Function) ─────────
+
+/// Min-N-protected company aggregate for a survey, read from
+/// `survey_aggregates/{surveyId}__{companyId}` (written by the
+/// computeSurveyAggregate CF). Drives the insights "Karşılaştırma" view.
+/// firestore.rules only allow the caller to read their own company's doc.
+final surveyAggregateProvider = FutureProvider.family<SurveyAggregate?,
+    ({String surveyId, String companyId})>((ref, args) async {
+  final db = ref.watch(firestoreProvider);
+  final doc = await db
+      .collection('survey_aggregates')
+      .doc('${args.surveyId}__${args.companyId}')
+      .get();
+  if (!doc.exists) return null;
+  return SurveyAggregate.fromFirestore(doc);
 });
