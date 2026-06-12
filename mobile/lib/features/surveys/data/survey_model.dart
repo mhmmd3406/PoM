@@ -29,6 +29,9 @@ class SurveyQuestion {
     required this.text,
     required this.type,
     this.hint = '',
+    this.category,
+    this.reverseScore = false,
+    this.isEnps = false,
   });
 
   final String id;
@@ -36,11 +39,26 @@ class SurveyQuestion {
   final SurveyQuestionType type;
   final String hint;
 
+  /// Groups this question into a named category for aggregate scoring.
+  /// Mirrors `SurveyQuestion.category` in admin/src/pages/portal/types.ts.
+  final String? category;
+
+  /// Evet=1, Hayır=5 when true (negatively-framed question, e.g. mobbing).
+  final bool reverseScore;
+
+  /// Marks the designated eNPS question (must be scale10).
+  final bool isEnps;
+
   factory SurveyQuestion.fromMap(Map<String, dynamic> m) => SurveyQuestion(
         id: m['id'] as String? ?? '',
         text: m['text'] as String? ?? '',
         type: SurveyQuestionTypeX.fromString(m['type'] as String? ?? ''),
         hint: m['hint'] as String? ?? '',
+        category: (m['category'] as String?)?.trim().isEmpty ?? true
+            ? null
+            : (m['category'] as String).trim(),
+        reverseScore: m['reverseScore'] as bool? ?? false,
+        isEnps: m['isEnps'] as bool? ?? false,
       );
 }
 

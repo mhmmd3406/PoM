@@ -99,12 +99,20 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
       );
 
       // Reflect the answer in the in-memory user model immediately so the
-      // survey lists + the already-answered guard update without a re-read
-      // (currentUserProvider is loaded once at sign-in, not streamed).
-      if (user != null && !user.answeredSurveyIds.contains(survey.id)) {
+      // survey lists, the already-answered guard, and the personal result view
+      // update without a re-read (currentUserProvider is loaded once at sign-in,
+      // not streamed).
+      if (user != null) {
         ref.read(authStateNotifierProvider.notifier).refreshUser(
               user.copyWith(
-                answeredSurveyIds: [...user.answeredSurveyIds, survey.id],
+                answeredSurveyIds:
+                    user.answeredSurveyIds.contains(survey.id)
+                        ? user.answeredSurveyIds
+                        : [...user.answeredSurveyIds, survey.id],
+                surveyAnswers: {
+                  ...user.surveyAnswers,
+                  survey.id: answersMap,
+                },
               ),
             );
       }
@@ -137,6 +145,16 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
     if (_step > 0) setState(() => _step--);
   }
 
+  /// Pops if there is a route to pop, otherwise routes home — safe for both the
+  /// pushed /survey/:id/answer route and any go()-based entry.
+  void _safeClose() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return switch (_loadState) {
@@ -148,6 +166,9 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
       _LoadState.done => _ThankYouScreen(
           survey: _survey,
           onHome: () => context.go('/'),
+          onViewResults: _survey != null
+              ? () => context.pushReplacement('/survey/${_survey!.id}/result')
+              : null,
         ),
       _LoadState.alreadyAnswered => _AlreadyAnsweredScreen(
           onHome: () => context.go('/'),
@@ -182,162 +203,194 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
     final sourceLabel =
         survey.isAdminSurvey ? 'PoM Platform' : 'Şirketiniz';
 
+    // NOTE: built entirely inside `body` with custom (GestureDetector) buttons
+    // and a FractionallySizedBox progress bar — NOT Scaffold.appBar /
+    // bottomNavigationBar with Material buttons. On this Flutter version a
+    // Material ButtonStyleButton (or LinearProgressIndicator) placed as a
+    // non-flex sibling to an Expanded silently aborts the parent layout,
+    // leaving the whole question body blank (SurveyAnswerScreen empty-body bug,
+    // 2026-05-31). Keep these custom widgets — do not revert to Material here.
     return Scaffold(
       backgroundColor: bg,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(64),
-        child: AppBar(
-          backgroundColor: bg,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          titleSpacing: 0,
-          title: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: _back,
-                  child: Icon(Icons.arrow_back_rounded, size: 22, color: ink2),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'SORU ${_step + 1} / $total  •  ${(progress * 100).round()}%',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: ink3,
-                          letterSpacing: 0.4,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Header (custom) ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _back,
+                    child:
+                        Icon(Icons.arrow_back_rounded, size: 22, color: ink2),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'SORU ${_step + 1} / $total  •  ${(progress * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: ink3,
+                            letterSpacing: 0.4,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 5),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 4,
-                          backgroundColor: isDark
+                        const SizedBox(height: 5),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: Container(
+                            height: 4,
+                            color: isDark
+                                ? AppColors.darkBgAlt
+                                : AppColors.lightBgAlt,
+                            child: FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: progress,
+                              child: Container(color: AppColors.blue),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _safeClose,
+                    child: Icon(Icons.close_rounded, size: 20, color: ink3),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Scrollable content ──
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                children: [
+                  // Survey label + anon note
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isDark
                               ? AppColors.darkBgAlt
                               : AppColors.lightBgAlt,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppColors.blue),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${survey.title} · $sourceLabel',
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: ink3,
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                          color: AppColors.sage,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          'Anonim kaydedilir',
+                          style: TextStyle(fontSize: 11, color: ink3),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: () => context.pop(),
-                  child: Icon(Icons.close_rounded, size: 20, color: ink3),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton.icon(
-                onPressed: _step > 0 ? _back : null,
-                icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                label: const Text('Geri'),
-                style: TextButton.styleFrom(foregroundColor: ink2),
-              ),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: answered != null ? _next : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                  const SizedBox(height: 20),
+                  Text(
+                    q.text,
+                    style: GoogleFonts.bricolageGrotesque(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: ink,
+                      height: 1.25,
+                      letterSpacing: -0.5,
+                    ),
                   ),
-                  child: Text(
-                    isLast ? 'Gönder' : 'İleri →',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Survey label + anon note
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.darkBgAlt
-                        : AppColors.lightBgAlt,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${survey.title} · $sourceLabel',
-                    style: TextStyle(
-                        fontSize: 11.5,
-                        color: ink3,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 4,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    color: AppColors.sage,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Flexible(
-                  child: Text(
-                    'Anonim kaydedilir',
-                    style: TextStyle(fontSize: 11, color: ink3),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            Text(
-              q.text,
-              style: GoogleFonts.bricolageGrotesque(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: ink,
-                height: 1.25,
-                letterSpacing: -0.5,
+                  if (q.hint.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(q.hint,
+                        style:
+                            TextStyle(fontSize: 14, color: ink2, height: 1.4)),
+                  ],
+                  const SizedBox(height: 28),
+                  // Input widget based on question type
+                  _buildInput(q, answered, isDark, border, ink, ink2, ink3),
+                ],
               ),
             ),
-            if (q.hint.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(q.hint,
-                  style: TextStyle(fontSize: 14, color: ink2, height: 1.4)),
-            ],
-            const SizedBox(height: 28),
 
-            // Input widget based on question type
-            _buildInput(q, answered, isDark, border, ink, ink2, ink3),
+            // ── Bottom bar (custom buttons) ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _step > 0 ? _back : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.arrow_back_rounded,
+                              size: 16, color: _step > 0 ? ink2 : ink3),
+                          const SizedBox(width: 4),
+                          Text('Geri',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _step > 0 ? ink2 : ink3)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: answered != null ? _next : null,
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: answered != null
+                            ? AppColors.blue
+                            : (isDark
+                                ? AppColors.darkBgAlt
+                                : AppColors.lightBgAlt),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        isLast ? 'Gönder' : 'İleri →',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: answered != null ? Colors.white : ink3),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -558,9 +611,14 @@ class _AlreadyAnsweredScreen extends StatelessWidget {
 // ─── Thank you screen ─────────────────────────────────────────────────────────
 
 class _ThankYouScreen extends StatelessWidget {
-  const _ThankYouScreen({required this.survey, required this.onHome});
+  const _ThankYouScreen({
+    required this.survey,
+    required this.onHome,
+    this.onViewResults,
+  });
   final SurveyModel? survey;
   final VoidCallback onHome;
+  final VoidCallback? onViewResults;
 
   @override
   Widget build(BuildContext context) {
@@ -629,20 +687,52 @@ class _ThankYouScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: onHome,
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                if (onViewResults != null) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: onViewResults,
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('Kişisel Sonuçlarını Gör',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
-                    child: const Text('Ana Sayfa',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700)),
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton(
+                      onPressed: onHome,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: ink2,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('Ana Sayfa',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ] else
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: onHome,
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('Ana Sayfa',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
               ],
             ),
           ),
