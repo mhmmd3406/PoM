@@ -7,6 +7,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/pro_gate.dart';
 import '../../../models/insight_model.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../surveys/data/survey_scoring.dart';
+import '../../surveys/providers/surveys_provider.dart';
 import '../providers/insights_provider.dart';
 import 'radar_chart_widget.dart';
 
@@ -65,6 +67,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   Widget build(BuildContext context) {
     final insightsAsync = ref.watch(insightsStreamProvider);
     final isPro = ref.watch(currentUserProvider)?.isPro ?? false;
+    final experience = ref.watch(experienceResultProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg      = isDark ? AppColors.darkBg      : AppColors.lightBg;
@@ -82,11 +85,25 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
           loading: () => const _InsightsSkeleton(),
           error: (e, _) => _ErrorState(message: e.toString()),
           data: (insights) {
+            // The survey result is independent of check-in data: a user may
+            // have completed the Genel Anket without any check-ins. Only fall
+            // back to the full-screen empty state when BOTH are absent.
             if (insights == null) {
-              return _EmptyState(isDark: isDark, ink: ink, ink2: ink2);
+              if (experience == null) {
+                return _EmptyState(isDark: isDark, ink: ink, ink2: ink2);
+              }
+              return _SurveyOnlyView(
+                experience: experience,
+                surface: surface,
+                ink: ink,
+                ink2: ink2,
+                ink3: ink3,
+                border: border,
+              );
             }
             return _InsightsContent(
               insights: insights,
+              experience: experience,
               selectedView: _selectedView,
               onViewChanged: (v) => setState(() => _selectedView = v),
               isPro: isPro,
@@ -145,6 +162,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
 class _InsightsContent extends StatelessWidget {
   const _InsightsContent({
     required this.insights,
+    required this.experience,
     required this.selectedView,
     required this.onViewChanged,
     required this.isPro,
@@ -159,6 +177,7 @@ class _InsightsContent extends StatelessWidget {
   });
 
   final InsightModel insights;
+  final ExperienceResult? experience;
   final String selectedView;
   final ValueChanged<String> onViewChanged;
   final bool isPro;
@@ -274,10 +293,41 @@ class _InsightsContent extends StatelessWidget {
           ),
         ),
 
+        // ── Genel Deneyim Anketi section (the "esas veri") ───────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: _SurveyInsightsSection(
+              experience: experience,
+              surface: surface,
+              border: border,
+              ink: ink,
+              ink2: ink2,
+              ink3: ink3,
+            ),
+          ),
+        ),
+
+        // ── Weekly-pulse section header (delineates the two data worlds) ─────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+            child: Text(
+              'HAFTALIK NABIZ',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: ink3,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ),
+
         // ── Toggle pill ───────────────────────────────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            padding: const EdgeInsets.fromLTRB(24, 10, 24, 0),
             child: _TogglePill(
               selected: selectedView,
               onChanged: onViewChanged,
@@ -1966,4 +2016,559 @@ class _DimensionMeta {
   final String label;
   final String emoji;
   final Color color;
+}
+
+// ─── Genel Deneyim Anketi section ──────────────────────────────────────────────
+
+/// Personal result of the 48-question Genel Çalışan Deneyimi Anketi, rendered as
+/// a top section in Insights (the survey is the product's primary data). Uses the
+/// shared [survey_scoring] engine; aggregate/company comparison is Faz 2 (needs a
+/// Cloud Function). When [experience] is null the user hasn't completed it yet, so
+/// a CTA card invites them in.
+class _SurveyInsightsSection extends StatelessWidget {
+  const _SurveyInsightsSection({
+    required this.experience,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+  });
+
+  final ExperienceResult? experience;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink2;
+  final Color ink3;
+
+  static const _months = [
+    'Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz',
+    'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final exp = experience;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 8, bottom: 10),
+          child: Text(
+            'GENEL DENEYİM ANKETİ',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: ink3,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        if (exp == null)
+          _SurveyCtaCard(
+            surface: surface,
+            border: border,
+            ink: ink,
+            ink3: ink3,
+          )
+        else ...[
+          _SurveyHeroCard(
+            result: exp,
+            surface: surface,
+            border: border,
+            ink: ink,
+            ink2: ink2,
+            ink3: ink3,
+            monthLabel: exp.survey.createdAt != null
+                ? '${_months[exp.survey.createdAt!.month - 1]} '
+                    '${exp.survey.createdAt!.year}'
+                : null,
+          ),
+          const SizedBox(height: 12),
+          _SurveyCategoryCard(
+            categories: exp.categories,
+            surface: surface,
+            border: border,
+            ink: ink,
+            ink3: ink3,
+          ),
+          const SizedBox(height: 12),
+          _HighlightCard(
+            badge: 'EN GÜÇLÜ ALANIN',
+            icon: Icons.auto_awesome_rounded,
+            iconColor: AppColors.sageDeep,
+            bgColor: AppColors.sageWash,
+            borderColor: AppColors.sage,
+            subject: exp.strongest.name,
+            description:
+                '${exp.strongest.score.toStringAsFixed(1)}/5 ile en yüksek '
+                'skorun. Bu alandaki güçlü deneyimin sürüyor.',
+            ink: ink,
+            ink2: ink2,
+          ),
+          if (exp.hasDistinctWeakest) ...[
+            const SizedBox(height: 10),
+            _HighlightCard(
+              badge: 'GELİŞİME AÇIK ALAN',
+              icon: Icons.flag_rounded,
+              iconColor: AppColors.amberDeep,
+              bgColor: AppColors.amberWash,
+              borderColor: AppColors.amber,
+              subject: exp.weakest.name,
+              description:
+                  '${exp.weakest.score.toStringAsFixed(1)}/5 ile en düşük '
+                  'skorun. Bu boyut senin için zorlayıcı olabilir.',
+              ink: ink,
+              ink2: ink2,
+            ),
+          ],
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () =>
+                context.push('/survey/${exp.survey.id}/result'),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Detaylı sonuçları gör',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.arrow_forward_rounded,
+                      size: 16, color: AppColors.blue),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SurveyHeroCard extends StatelessWidget {
+  const _SurveyHeroCard({
+    required this.result,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+    required this.monthLabel,
+  });
+
+  final ExperienceResult result;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink2;
+  final Color ink3;
+  final String? monthLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final band = result.band;
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border),
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: band.wash,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      result.overall.toStringAsFixed(1),
+                      style: GoogleFonts.bricolageGrotesque(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        color: band.color,
+                        height: 1.0,
+                      ),
+                    ),
+                    Text('/ 5', style: TextStyle(fontSize: 11, color: ink3)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'GENEL DEĞERLENDİRME',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: ink3,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (monthLabel != null)
+                          Text(monthLabel!,
+                              style: TextStyle(fontSize: 11, color: ink3)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      band.label,
+                      style: GoogleFonts.bricolageGrotesque(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: band.color,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      riskLabel(result.overall),
+                      style: TextStyle(fontSize: 12.5, color: ink),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (result.enps != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: result.enps!.color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.favorite_rounded,
+                      size: 16, color: result.enps!.color),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: TextStyle(fontSize: 12.5, color: ink2),
+                        children: [
+                          const TextSpan(text: 'Şirket bağlılığın: '),
+                          TextSpan(
+                            text: result.enps!.label,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: result.enps!.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SurveyCategoryCard extends StatelessWidget {
+  const _SurveyCategoryCard({
+    required this.categories,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink3,
+  });
+
+  final List<CategoryResult> categories;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink3;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border),
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'KATEGORİ SKORLARIN',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: ink3,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 14),
+          ...List.generate(categories.length, (i) {
+            final cat = categories[i];
+            final band = scoreBand(cat.score);
+            return Padding(
+              padding:
+                  EdgeInsets.only(bottom: i < categories.length - 1 ? 14 : 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          cat.name,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w500,
+                            color: ink,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        cat.score.toStringAsFixed(1),
+                        style: GoogleFonts.bricolageGrotesque(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: band.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: ((cat.score - 1) / 4).clamp(0.0, 1.0),
+                      minHeight: 6,
+                      backgroundColor: band.wash,
+                      valueColor: AlwaysStoppedAnimation<Color>(band.color),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _SurveyCtaCard extends StatelessWidget {
+  const _SurveyCtaCard({
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink3,
+  });
+
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink3;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.go('/surveys'),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: AppColors.blueSoft,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.assignment_rounded,
+                  color: AppColors.blue, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Deneyim karneni gör',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: ink,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Genel anketi tamamladığında kişisel sonuçların burada belirir.',
+                    style: TextStyle(fontSize: 12.5, color: ink3, height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.arrow_forward_rounded, size: 18, color: ink3),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown when the user has a survey result but no check-in data yet, so the
+/// full-screen "no check-in" empty state would otherwise hide their survey
+/// results. Renders the header + survey section + a compact check-in nudge.
+class _SurveyOnlyView extends StatelessWidget {
+  const _SurveyOnlyView({
+    required this.experience,
+    required this.surface,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+    required this.border,
+  });
+
+  final ExperienceResult experience;
+  final Color surface;
+  final Color ink;
+  final Color ink2;
+  final Color ink3;
+  final Color border;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(0, 20, 0, 32),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+          child: Text(
+            'İçgörüler',
+            style: GoogleFonts.bricolageGrotesque(
+              fontSize: 26,
+              fontWeight: FontWeight.w600,
+              color: ink,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _SurveyInsightsSection(
+            experience: experience,
+            surface: surface,
+            border: border,
+            ink: ink,
+            ink2: ink2,
+            ink3: ink3,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'HAFTALIK NABIZ',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: ink3,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Henüz check-in yok',
+                  style: GoogleFonts.bricolageGrotesque(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: ink,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'İlk haftalık check-in\'ini yaparak boyut bazında nabzını da '
+                  'görmeye başla.',
+                  style: TextStyle(fontSize: 13, color: ink2, height: 1.45),
+                ),
+                const SizedBox(height: 14),
+                GestureDetector(
+                  onTap: () => context.go('/checkin'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: AppColors.blue,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Check-in Yap',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

@@ -9,6 +9,7 @@ import '../../../models/insight_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../checkin/providers/checkin_provider.dart';
 import '../../insights/providers/insights_provider.dart';
+import '../../surveys/data/survey_scoring.dart';
 import '../../surveys/providers/surveys_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -24,6 +25,9 @@ class HomeScreen extends ConsumerWidget {
     final pendingSurveys =
         ref.watch(pendingSurveysProvider).valueOrNull ?? const [];
     final nextSurvey = pendingSurveys.isEmpty ? null : pendingSurveys.first;
+    // Personal result of the completed Genel Çalışan Deneyimi Anketi, if any —
+    // drives the "Deneyim Karnem" card. Null until the user finishes it.
+    final experience = ref.watch(experienceResultProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
@@ -210,6 +214,26 @@ class HomeScreen extends ConsumerWidget {
               ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 14)),
+
+              // ── Deneyim Karnem (personal Genel Anket result) ─────────────────
+              if (experience != null) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _ExperienceReportCard(
+                      result: experience,
+                      surface: surface,
+                      border: border,
+                      ink: ink,
+                      ink2: ink2,
+                      ink3: ink3,
+                      onTap: () =>
+                          context.push('/survey/${experience.survey.id}/result'),
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 14)),
+              ],
 
               // ── Bottom row: Company pulse + Survey card ──────────────────────
               SliverToBoxAdapter(
@@ -1033,6 +1057,189 @@ class _NewSurveyCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Deneyim Karnem card ──────────────────────────────────────────────────────
+
+class _ExperienceReportCard extends StatelessWidget {
+  const _ExperienceReportCard({
+    required this.result,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+    required this.onTap,
+  });
+
+  final ExperienceResult result;
+  final Color surface;
+  final Color border;
+  final Color ink;
+  final Color ink2;
+  final Color ink3;
+  final VoidCallback onTap;
+
+  static const _months = [
+    'Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz',
+    'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final band = result.band;
+    final date = result.survey.createdAt;
+    final dateLabel =
+        date != null ? '${_months[date.month - 1]} ${date.year}' : null;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Label row
+            Row(
+              children: [
+                const Text('📋', style: TextStyle(fontSize: 13)),
+                const SizedBox(width: 6),
+                Text(
+                  'DENEYİM KARNEM',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: ink3,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const Spacer(),
+                if (dateLabel != null)
+                  Text(dateLabel,
+                      style: TextStyle(fontSize: 11, color: ink3)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Band + score
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  band.label,
+                  style: GoogleFonts.bricolageGrotesque(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                    color: band.color,
+                    height: 1.0,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Text(
+                    '${result.overall.toStringAsFixed(1)}/5',
+                    style: TextStyle(fontSize: 13, color: ink3),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            // 12-category mini heat strip (sorted high → low)
+            SizedBox(
+              height: 34,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (int i = 0; i < result.categories.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 3),
+                    Expanded(
+                      child: _HeatBar(score: result.categories[i].score),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            // Chips: eNPS class + weakest area
+            Row(
+              children: [
+                if (result.enps != null)
+                  _MiniChip(
+                    text: result.enps!.label,
+                    color: result.enps!.color,
+                  ),
+                if (result.enps != null && result.hasDistinctWeakest)
+                  const SizedBox(width: 8),
+                if (result.hasDistinctWeakest)
+                  Flexible(
+                    child: _MiniChip(
+                      text: 'Gelişim: ${result.weakest.name}',
+                      color: AppColors.amberDeep,
+                    ),
+                  ),
+                const Spacer(),
+                Icon(Icons.arrow_forward_rounded, size: 16, color: ink2),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeatBar extends StatelessWidget {
+  const _HeatBar({required this.score});
+  final double score;
+
+  @override
+  Widget build(BuildContext context) {
+    // Height encodes score (1→short, 5→tall); color encodes band.
+    final t = ((score - 1) / 4).clamp(0.0, 1.0);
+    final color = scoreBand(score).color;
+    return FractionallySizedBox(
+      heightFactor: 0.4 + 0.6 * t,
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(3),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  const _MiniChip({required this.text, required this.color});
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: color,
         ),
       ),
     );
