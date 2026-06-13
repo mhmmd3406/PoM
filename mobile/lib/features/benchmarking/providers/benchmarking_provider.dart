@@ -80,6 +80,12 @@ final selectedPeriodProvider = StateProvider<String>((ref) => '90d');
 final selectedCompaniesProvider =
     StateProvider<List<CompanySummary>>((ref) => []);
 
+// ─── Genel Anket karşılaştırma hedef seçimi ───────────────────────────────────
+// Sektör ortalamasını kıyasa ekle.
+final surveyIncludeSectorProvider = StateProvider<bool>((ref) => false);
+// "Tümü": seçili şirketler yerine min-N geçen TÜM şirketleri kıyasla.
+final surveyShowAllProvider = StateProvider<bool>((ref) => false);
+
 // ─── Company search ──────────────────────────────────────────────────────────
 
 final companySearchQueryProvider = StateProvider<String>((ref) => '');

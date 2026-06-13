@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/firebase_providers.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../data/survey_aggregate.dart';
+import '../data/survey_benchmark.dart';
 import '../data/survey_model.dart';
 import '../data/survey_scoring.dart';
 import '../data/surveys_repository.dart';
@@ -124,4 +127,51 @@ final experienceResultProvider = Provider<ExperienceResult?>((ref) {
     categories: categories,
     enps: enps,
   );
+});
+
+// ─── Survey aggregate (company / department / sector — Cloud Function) ─────────
+
+/// Min-N-protected company aggregate for a survey, read from
+/// `survey_aggregates/{surveyId}__{companyId}` (written by the
+/// computeSurveyAggregate CF). Drives the insights "Karşılaştırma" view.
+/// firestore.rules only allow the caller to read their own company's doc.
+final surveyAggregateProvider = StreamProvider.family<SurveyAggregate?,
+    ({String surveyId, String companyId})>((ref, args) {
+  final db = ref.watch(firestoreProvider);
+  // Snapshot stream (not get()): auto-reconnects, so a cold-start
+  // `cloud_firestore/unavailable` resolves itself instead of caching as an error.
+  return db
+      .collection('survey_aggregates')
+      .doc('${args.surveyId}__${args.companyId}')
+      .snapshots()
+      .map((doc) => doc.exists ? SurveyAggregate.fromFirestore(doc) : null);
+});
+
+// ─── Cross-company survey benchmark (Şirket Karşılaştırması) ───────────────────
+
+/// The experience survey to benchmark — the answered one if available, else the
+/// most recent categorized survey the user is eligible for (so the comparison
+/// works even before the user completes it; "Sen" is just omitted until then).
+final experienceSurveyIdProvider = Provider<String?>((ref) {
+  final answered = ref.watch(experienceResultProvider);
+  if (answered != null) return answered.survey.id;
+  final eligible = ref.watch(_eligibleSurveysProvider).valueOrNull ?? const [];
+  final exp = eligible.where(_isExperienceSurvey).toList()
+    ..sort((a, b) =>
+        (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+  return exp.isEmpty ? null : exp.first.id;
+});
+
+/// Cross-company, min-N-protected survey benchmark from `survey_benchmarks/{id}`
+/// (written by computeSurveyAggregate). Readable by any authenticated user —
+/// anonymized company + sector averages. Drives the "Şirket Karşılaştırması"
+/// survey comparison.
+final surveyBenchmarkProvider =
+    StreamProvider.family<SurveyBenchmark?, String>((ref, surveyId) {
+  final db = ref.watch(firestoreProvider);
+  return db
+      .collection('survey_benchmarks')
+      .doc(surveyId)
+      .snapshots()
+      .map((doc) => doc.exists ? SurveyBenchmark.fromFirestore(doc) : null);
 });

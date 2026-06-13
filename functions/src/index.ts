@@ -7,6 +7,7 @@
 
 import { onCall, onRequest, CallableRequest, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 import { applyThresholdFloors, sanitizeThresholdInput } from "./thresholds";
@@ -812,6 +813,244 @@ export const computeInsights = onDocumentCreated(
       );
 
     logger.info("Insights computed", { companyId, retentionRisk });
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 6b. computeSurveyAggregate — scheduled min-N-protected survey aggregates
+// ---------------------------------------------------------------------------
+// The 48-question Genel Çalışan Deneyimi Anketi is a platform survey
+// (companyId='__admin__'), so survey_responses do NOT carry the respondent's
+// real company/department. We recover them by JOINING on sha256(uid): the mobile
+// submit path stores `userIdHash = sha256(uid)` (plain, unsalted — see
+// surveys_repository.dart hashUserId), so for each user we recompute sha256(uid)
+// and match it to the response. Mirrors scripts/seed_gate_aggregate_data.js
+// --verify (the reference implementation) + the scoring engine in
+// admin/.../PortalSurveyResultsPage.tsx and mobile survey_scoring.dart.
+//
+// Output: one doc per (survey, company) at survey_aggregates/{surveyId}__{cid},
+// containing that company's aggregate + its departments + its sector benchmark
+// (sector denormalized so a user reads ONE doc). firestore.rules restrict each
+// doc to that company's members (+ admins), so no company sees another's scores;
+// the sector block is an anonymized cross-company benchmark.
+
+type SurveyQ = {
+  id: string;
+  type: string;
+  category?: string;
+  reverseScore?: boolean;
+  isEnps?: boolean;
+};
+
+/** Normalize one survey answer to 1–5 (mirrors survey_scoring.dart). */
+function normalizeSurveyAnswer(
+  answer: unknown,
+  type: string,
+  reverseScore?: boolean
+): number | null {
+  if (answer === null || answer === undefined) return null;
+  switch (type) {
+    case "emoji5":
+      return typeof answer === "number" ? answer + 1 : null; // mobile 0-indexed
+    case "scale5":
+      return typeof answer === "number" ? answer : null;
+    case "scale10":
+      return typeof answer === "number" ? (answer / 10) * 4 + 1 : null;
+    case "yesno":
+    case "trueFalse":
+      if (typeof answer !== "boolean") return null;
+      return answer ? (reverseScore ? 1 : 5) : (reverseScore ? 5 : 1);
+    default:
+      return null;
+  }
+}
+
+type Acc = { n: number; cat: Record<string, number[]>; enps: number[] };
+const emptyAcc = (): Acc => ({ n: 0, cat: {}, enps: [] });
+
+function accInto(
+  acc: Acc,
+  questions: SurveyQ[],
+  answers: Record<string, unknown>,
+  enpsQ?: SurveyQ
+): void {
+  acc.n += 1;
+  for (const q of questions) {
+    if (!q.category || q.type === "text") continue;
+    const v = normalizeSurveyAnswer(answers[q.id], q.type, q.reverseScore);
+    if (v === null) continue;
+    (acc.cat[q.category] = acc.cat[q.category] ?? []).push(v);
+  }
+  if (enpsQ && typeof answers[enpsQ.id] === "number") {
+    acc.enps.push(answers[enpsQ.id] as number);
+  }
+}
+
+function enpsScore(raw: number[]): number | null {
+  if (raw.length === 0) return null;
+  const promoters = raw.filter((x) => x >= 9).length;
+  const detractors = raw.filter((x) => x <= 6).length;
+  return Math.round((promoters / raw.length) * 100 - (detractors / raw.length) * 100);
+}
+
+/** Reduce an accumulator to a published group summary, gated by min-N. */
+function summarize(acc: Acc, minN: number) {
+  if (acc.n < minN) {
+    return { n: acc.n, locked: true, overall: null, categories: {}, enps: null };
+  }
+  const categories: Record<string, number> = {};
+  for (const [c, vals] of Object.entries(acc.cat)) {
+    if (vals.length) categories[c] = Math.round((avg(vals) as number) * 100) / 100;
+  }
+  const catVals = Object.values(categories);
+  const overall = catVals.length
+    ? Math.round((catVals.reduce((s, v) => s + v, 0) / catVals.length) * 100) / 100
+    : null;
+  return { n: acc.n, locked: false, overall, categories, enps: enpsScore(acc.enps) };
+}
+
+export const computeSurveyAggregate = onSchedule(
+  {
+    schedule: "every 24 hours",
+    region: "europe-west1",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+  },
+  async () => {
+    const thresholds = (await (async () => {
+      const doc = await db.collection("platform_config").doc("thresholds").get();
+      return doc.exists ? doc.data() : {};
+    })()) as Record<string, number>;
+    const safe = applyThresholdFloors(thresholds);
+    const companyMinN = safe.company_min_n;
+    const deptMinN = safe.department_min_n;
+
+    // sha256(uid) → {companyId, department}; companyId → industry.
+    const usersSnap = await db.collection("users").get();
+    const hashToUser = new Map<string, { companyId: string; department: string }>();
+    for (const d of usersSnap.docs) {
+      const u = d.data();
+      if (!u.companyId || u.deleted) continue;
+      const h = crypto.createHash("sha256").update(d.id).digest("hex");
+      hashToUser.set(h, { companyId: u.companyId, department: (u.department as string) ?? "(belirsiz)" });
+    }
+    const companiesSnap = await db.collection("companies").get();
+    const industryOf = new Map<string, string>();
+    const nameOf = new Map<string, string>();
+    for (const d of companiesSnap.docs) {
+      industryOf.set(d.id, (d.data().industry as string) ?? "Diğer");
+      nameOf.set(d.id, (d.data().name as string) ?? d.id);
+    }
+
+    // Experience surveys = active surveys whose questions carry categories.
+    const surveysSnap = await db.collection("surveys").where("status", "==", "active").get();
+    let surveysProcessed = 0;
+    let docsWritten = 0;
+
+    for (const sdoc of surveysSnap.docs) {
+      const questions = ((sdoc.data().questions as SurveyQ[]) ?? []).filter(Boolean);
+      if (!questions.some((q) => q.category)) continue;
+      const enpsQ = questions.find((q) => q.isEnps && q.type === "scale10");
+
+      const respSnap = await db.collection("survey_responses").where("surveyId", "==", sdoc.id).get();
+
+      const companyAcc: Record<string, Acc> = {};
+      const deptAcc: Record<string, Record<string, Acc>> = {};
+      const sectorAcc: Record<string, Acc & { companies: Set<string> }> = {};
+
+      for (const r of respSnap.docs) {
+        const data = r.data();
+        const g = hashToUser.get(data.userIdHash);
+        if (!g) continue; // unjoined response (no matching user)
+        const answers = (data.answers as Record<string, unknown>) ?? {};
+        const industry = industryOf.get(g.companyId) ?? "Diğer";
+
+        (companyAcc[g.companyId] ??= emptyAcc());
+        accInto(companyAcc[g.companyId], questions, answers, enpsQ);
+
+        (deptAcc[g.companyId] ??= {});
+        (deptAcc[g.companyId][g.department] ??= emptyAcc());
+        accInto(deptAcc[g.companyId][g.department], questions, answers, enpsQ);
+
+        const sa = (sectorAcc[industry] ??= Object.assign(emptyAcc(), { companies: new Set<string>() }));
+        accInto(sa, questions, answers, enpsQ);
+        sa.companies.add(g.companyId);
+      }
+
+      const batch = db.batch();
+      for (const companyId of Object.keys(companyAcc)) {
+        const industry = industryOf.get(companyId) ?? "Diğer";
+        const sa = sectorAcc[industry];
+        const departments: Record<string, ReturnType<typeof summarize>> = {};
+        for (const [dept, acc] of Object.entries(deptAcc[companyId] ?? {})) {
+          departments[dept] = summarize(acc, deptMinN);
+        }
+        const ref = db.collection("survey_aggregates").doc(`${sdoc.id}__${companyId}`);
+        batch.set(ref, {
+          surveyId: sdoc.id,
+          companyId,
+          companyMinN,
+          departmentMinN: deptMinN,
+          company: summarize(companyAcc[companyId], companyMinN),
+          departments,
+          sector: sa
+            ? { industry, nCompanies: sa.companies.size, ...summarize(sa, companyMinN) }
+            : null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        docsWritten += 1;
+      }
+
+      // Cross-company benchmark doc: anonymized, min-N-cleared company averages +
+      // sector averages, readable by any authenticated user (the benchmarking
+      // product). Only companies that cleared the company floor are listed — no
+      // individuals, no sub-min-N groups. Drives the "Şirket Karşılaştırması"
+      // survey comparison (Sen vs selected companies / sector / all).
+      const benchCompanies = Object.keys(companyAcc)
+        .map((companyId) => {
+          const s = summarize(companyAcc[companyId], companyMinN);
+          if (s.locked) return null;
+          return {
+            companyId,
+            name: nameOf.get(companyId) ?? companyId,
+            industry: industryOf.get(companyId) ?? "Diğer",
+            n: s.n,
+            overall: s.overall,
+            categories: s.categories,
+            enps: s.enps,
+          };
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null)
+        .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0));
+
+      const benchSectors: Record<string, unknown> = {};
+      for (const [industry, sa] of Object.entries(sectorAcc)) {
+        const s = summarize(sa, companyMinN);
+        if (s.locked) continue;
+        benchSectors[industry] = {
+          industry,
+          nCompanies: sa.companies.size,
+          n: s.n,
+          overall: s.overall,
+          categories: s.categories,
+          enps: s.enps,
+        };
+      }
+
+      batch.set(db.collection("survey_benchmarks").doc(sdoc.id), {
+        surveyId: sdoc.id,
+        companyMinN,
+        companies: benchCompanies,
+        sectors: benchSectors,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      docsWritten += 1;
+
+      await batch.commit();
+      surveysProcessed += 1;
+    }
+
+    logger.info("computeSurveyAggregate done", { surveysProcessed, docsWritten });
   }
 );
 
