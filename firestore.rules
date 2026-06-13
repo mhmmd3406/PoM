@@ -34,10 +34,25 @@ service cloud.firestore {
     }
 
     // ── users ────────────────────────────────────────────────────────────────
+    // Identity / authorization fields that gate access to OTHER collections must
+    // be immutable from the client. `companyId` selects which company's
+    // survey_aggregates the caller may read (myCompanyId()); `userIdHash` bridges
+    // owner access to anonymous checkins/insights (myUserIdHash()); `role` /
+    // `linkedinHash` / `uid` / `deleted` are identity/entitlement markers. These
+    // are written ONLY by Cloud Functions (Admin SDK bypasses rules) or by an
+    // admin. Without this, an owner could self-edit companyId to read another
+    // company's aggregate scores, or repoint userIdHash to a victim's check-ins.
+    // Owners may still freely update their profile fields (displayName, avatar,
+    // KVKK consent, answeredSurveyIds, surveyAnswers, …).
+    function userImmutableFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+                .hasAny(['uid', 'userIdHash', 'linkedinHash', 'companyId', 'role', 'deleted']);
+    }
     match /users/{userId} {
       allow read:   if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      allow update: if isAdmin()
+                    || (isOwner(userId) && userImmutableFieldsUnchanged());
       allow delete: if isAdmin();
     }
 

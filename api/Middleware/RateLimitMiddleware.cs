@@ -16,6 +16,17 @@ public sealed class RateLimitMiddleware
     // key: apiKey string → sliding window bucket
     private static readonly ConcurrentDictionary<string, SlidingBucket> _buckets = new();
 
+    // Hard cap on the number of tracked buckets. This middleware runs BEFORE the
+    // API-key is validated, so the dictionary is keyed by an UNVALIDATED,
+    // caller-controlled header value. Without a cap, an unauthenticated client
+    // rotating a fresh X-Api-Key on every request would grow this static
+    // dictionary without bound → memory-exhaustion DoS. When the cap is reached
+    // we first reclaim buckets whose window has fully expired; if it is still
+    // full (all buckets active), new keys are simply not tracked — they are
+    // rejected moments later by ApiKeyMiddleware anyway, so skipping the limiter
+    // for them is safe and bounds memory deterministically.
+    private const int MaxBuckets = 50_000;
+
     public RateLimitMiddleware(RequestDelegate next, IConfiguration config, ILogger<RateLimitMiddleware> logger)
     {
         _next = next;
@@ -44,7 +55,24 @@ public sealed class RateLimitMiddleware
 
         var limit = _config.GetValue("RateLimit:RequestsPerHour", 100);
         var apiKey = rawKey.ToString();
-        var bucket = _buckets.GetOrAdd(apiKey, _ => new SlidingBucket(TimeSpan.FromHours(1)));
+
+        if (!_buckets.TryGetValue(apiKey, out var bucket))
+        {
+            // New key: only start tracking it if we are under the memory cap.
+            if (_buckets.Count >= MaxBuckets)
+            {
+                ReclaimExpiredBuckets();
+                if (_buckets.Count >= MaxBuckets)
+                {
+                    // Dictionary saturated with active buckets — don't grow it
+                    // further. The (almost certainly invalid) key falls through
+                    // to ApiKeyMiddleware, which returns 401.
+                    await _next(context);
+                    return;
+                }
+            }
+            bucket = _buckets.GetOrAdd(apiKey, _ => new SlidingBucket(TimeSpan.FromHours(1)));
+        }
 
         if (!bucket.TryConsume(limit))
         {
@@ -66,6 +94,21 @@ public sealed class RateLimitMiddleware
         context.Response.Headers["X-RateLimit-Remaining"] = remaining.ToString();
 
         await _next(context);
+    }
+
+    /// <summary>
+    /// Removes buckets whose sliding window has fully drained (no requests in the
+    /// last hour), reclaiming memory from keys that have gone idle. O(n) but only
+    /// invoked when the bucket cap is hit, so it is off the hot path.
+    /// </summary>
+    private static void ReclaimExpiredBuckets()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var kv in _buckets)
+        {
+            if (kv.Value.IsExpired(now))
+                _buckets.TryRemove(kv.Key, out _);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -105,6 +148,22 @@ public sealed class RateLimitMiddleware
                 var cutoff = DateTime.UtcNow - _window;
                 var active = _timestamps.Count(t => t >= cutoff);
                 return Math.Max(0, limit - active);
+            }
+        }
+
+        /// <summary>
+        /// True if the window has fully drained (no timestamps within the last
+        /// window). Prunes expired entries as a side effect. Used by the cap-driven
+        /// reclaim sweep to decide whether the bucket can be dropped.
+        /// </summary>
+        public bool IsExpired(DateTime now)
+        {
+            lock (_lock)
+            {
+                var cutoff = now - _window;
+                while (_timestamps.Count > 0 && _timestamps.Peek() < cutoff)
+                    _timestamps.Dequeue();
+                return _timestamps.Count == 0;
             }
         }
     }
