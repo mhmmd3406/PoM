@@ -340,10 +340,22 @@ function buildAnswers(questions, target) {
           updatedAt: new Date(), seed: true,
         }).mapValue.fields } });
     }
-    console.log(`[aggregates] ${writes.length} survey_aggregates doc yazılıyor (CF doc şekli)…`);
+    // survey_benchmarks/{surveyId} — çapraz-şirket benchmark (CF ile aynı şekil)
+    const nameOf = new Map(companies1.map(c => [c.id, c.f.name || c.id]));
+    const benchCompanies = Object.keys(companyAcc)
+      .map(cid => { const s = summarize(companyAcc[cid], COMPANY_MIN_N); if (s.locked) return null;
+        return { companyId: cid, name: nameOf.get(cid) || cid, industry: industryOf.get(cid) || 'Diğer', n: s.n, overall: s.overall, categories: s.categories, enps: s.enps }; })
+      .filter(Boolean).sort((a, b) => (b.overall || 0) - (a.overall || 0));
+    const benchSectors = {};
+    for (const [ind, sa] of Object.entries(sectorAcc)) { const s = summarize(sa, COMPANY_MIN_N); if (s.locked) continue;
+      benchSectors[ind] = { industry: ind, nCompanies: sa.companies.size, n: s.n, overall: s.overall, categories: s.categories, enps: s.enps }; }
+    writes.push({ update: { name: `${DB}/documents/survey_benchmarks/${SURVEY_ID}`,
+      fields: toVal({ surveyId: SURVEY_ID, companyMinN: COMPANY_MIN_N, companies: benchCompanies, sectors: benchSectors, updatedAt: new Date(), seed: true }).mapValue.fields } });
+
+    console.log(`[aggregates] ${writes.length} doc yazılıyor (survey_aggregates + survey_benchmarks, CF şekli)…`);
     await commit(tok, writes);
     const visible = Object.keys(companyAcc).filter(c => companyAcc[c].n >= COMPANY_MIN_N);
-    console.log(`[aggregates] tamam. min-N geçen şirket: ${visible.length} (${visible.join(', ')}).`);
+    console.log(`[aggregates] tamam. min-N geçen şirket: ${visible.length} (${visible.join(', ')}). benchmark: ${benchCompanies.length} şirket + ${Object.keys(benchSectors).length} sektör.`);
     return;
   }
 
