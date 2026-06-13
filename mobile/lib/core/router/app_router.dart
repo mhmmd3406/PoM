@@ -9,6 +9,7 @@ import '../../features/benchmarking/presentation/benchmarking_screen.dart';
 import '../../features/checkin/presentation/checkin_flow_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/insights/presentation/insights_screen.dart';
+import '../../features/legal/presentation/legal_text_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
@@ -33,6 +34,7 @@ class AppRoutes {
   static const subscription = '/subscription';
   static const benchmarking  = '/benchmarking';
   static const reports       = '/reports';
+  static const legal         = '/legal/:key';
   static const surveyAnswer  = '/survey/:id/answer';
   static const surveyResult  = '/survey/:id/result';
   static const surveyLock    = '/survey/:id/lock';
@@ -158,6 +160,12 @@ final routerProvider = Provider<GoRouter>((ref) {
               ],
             );
           },
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.legal,
+        builder: (context, state) => LegalTextScreen(
+          docKey: state.pathParameters['key'] ?? '',
         ),
       ),
       GoRoute(
