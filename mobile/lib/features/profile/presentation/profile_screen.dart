@@ -14,6 +14,7 @@ import '../../../core/theme/theme_provider.dart';
 import '../../../models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../insights/providers/insights_provider.dart';
+import '../../legal/legal_provider.dart';
 import '../../surveys/providers/surveys_provider.dart';
 import '../data/account_repository.dart';
 
@@ -35,6 +36,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     // doc; completedCount = answered-surveys provider. Each degrades gracefully
     // (0 / "—") while loading or when there is no data yet.
     final insights = ref.watch(insightsStreamProvider).valueOrNull;
+    final legalDocs = ref.watch(legalTextsProvider).valueOrNull;
     final completedCount =
         ref.watch(completedSurveysProvider).valueOrNull?.length ?? 0;
     final checkinCount = insights?.totalCheckins ?? 0;
@@ -229,11 +231,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   ]),
 
+                  // ── Yasal Metinler ───────────────────────────────────────────
+                  // Sourced live from the admin portal (platform_config/legal_texts).
+                  _SectionLabel(title: 'Yasal Metinler', ink3: ink3),
+                  _SettingsGroup(surface: surface, border: border, children: [
+                    for (var i = 0; i < kLegalTexts.length; i++)
+                      _ChevronRow(
+                        label: kLegalTexts[i].label,
+                        desc: _legalRowDesc(legalDocs?[kLegalTexts[i].key]),
+                        ink: ink,
+                        ink3: ink3,
+                        divider: divider,
+                        onTap: () => context.push('/legal/${kLegalTexts[i].key}'),
+                        last: i == kLegalTexts.length - 1,
+                      ),
+                  ]),
+
                   // ── Hesap & Gizlilik ─────────────────────────────────────────
                   _SectionLabel(title: 'Hesap & Gizlilik', ink3: ink3),
                   _SettingsGroup(surface: surface, border: border, children: [
-                    _ChevronRow(label: 'KVKK Aydınlatma', desc: 'Versiyon 1.0 · Mart 2026', ink: ink, ink3: ink3, divider: divider, onTap: () => _openUrl(AppConstants.kvkkUrl)),
-                    _ChevronRow(label: 'Gizlilik Politikası', ink: ink, ink3: ink3, divider: divider, onTap: () => _openUrl(AppConstants.privacyUrl)),
                     _ChevronRow(label: 'Verilerimi dışa aktar', desc: 'Tüm verilerim · JSON', ink: ink, ink3: ink3, divider: divider, onTap: () => _exportMyData()),
                     _ChevronRow(label: 'Hesabımı sil', desc: 'Tüm verim kalıcı olarak silinir', ink: AppColors.rose, ink3: ink3, divider: divider, onTap: () => _confirmAndDeleteAccount(), last: true),
                   ]),
@@ -329,6 +345,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  /// Sub-label for a legal row: version + last-updated date when published,
+  /// a gentle hint while unpublished, or nothing until the doc loads.
+  String? _legalRowDesc(LegalDoc? doc) {
+    if (doc == null) return null;
+    if (doc.isUnpublished) return 'Henüz yayınlanmadı';
+    final v = doc.version;
+    final d = doc.updatedAt;
+    final parts = <String>[
+      if (v != null && v.isNotEmpty) 'v$v',
+      if (d != null)
+        '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 
   String _planLabel(String role) => switch (role) {

@@ -9,6 +9,8 @@ import '../../features/benchmarking/presentation/benchmarking_screen.dart';
 import '../../features/checkin/presentation/checkin_flow_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/insights/presentation/insights_screen.dart';
+import '../../features/legal/legal_provider.dart';
+import '../../features/legal/presentation/legal_text_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
@@ -33,6 +35,7 @@ class AppRoutes {
   static const subscription = '/subscription';
   static const benchmarking  = '/benchmarking';
   static const reports       = '/reports';
+  static const legal         = '/legal/:key';
   static const surveyAnswer  = '/survey/:id/answer';
   static const surveyResult  = '/survey/:id/result';
   static const surveyLock    = '/survey/:id/lock';
@@ -40,20 +43,38 @@ class AppRoutes {
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = ref.watch(authStateNotifierProvider.notifier);
+  // Refresh on auth changes AND when the published legal texts load/change, so
+  // a newly-published KVKK version re-triggers the redirect check below.
+  final refresh = _RouterRefresh(ref, authNotifier);
+  ref.onDispose(refresh.dispose);
 
   return GoRouter(
     initialLocation: AppRoutes.onboarding,
-    refreshListenable: authNotifier,
+    refreshListenable: refresh,
     redirect: (BuildContext context, GoRouterState state) {
       final authState = ref.read(authStateNotifierProvider);
       if (authState.isLoading) return null;
 
       final isAuthenticated = authState.user != null;
       final kvkkAccepted = authState.user?.kvkkAccepted ?? false;
+
+      // Re-prompt KVKK when the published version differs from the one the user
+      // accepted — so the accepted text always equals the live text. Fail open:
+      // if the published version is unknown (loading / error / unpublished, e.g.
+      // debug bypass with no Firebase auth), fall back to the accepted flag and
+      // never lock the user out.
+      final publishedKvkkVersion =
+          ref.read(legalTextsProvider).valueOrNull?['kvkk']?.version;
+      final acceptedVersion = authState.user?.kvkkVersion;
+      final needsKvkk = !kvkkAccepted ||
+          (publishedKvkkVersion != null &&
+              publishedKvkkVersion.isNotEmpty &&
+              publishedKvkkVersion != acceptedVersion);
+
       final loc = state.matchedLocation;
 
       // Fully authenticated users skip onboarding/login/kvkk → home
-      if (isAuthenticated && kvkkAccepted) {
+      if (isAuthenticated && !needsKvkk) {
         const authScreens = [
           AppRoutes.onboarding,
           AppRoutes.login,
@@ -71,8 +92,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc == AppRoutes.login ? null : AppRoutes.login;
       }
 
-      // Authenticated but KVKK not accepted → KVKK screen
-      if (!kvkkAccepted && loc != AppRoutes.kvkk) {
+      // Authenticated but KVKK not accepted (or outdated) → KVKK screen
+      if (needsKvkk && loc != AppRoutes.kvkk) {
         return AppRoutes.kvkk;
       }
 
@@ -161,6 +182,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: AppRoutes.legal,
+        builder: (context, state) => LegalTextScreen(
+          docKey: state.pathParameters['key'] ?? '',
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.surveyAnswer,
         builder: (context, state) => SurveyAnswerScreen(
           surveyId: state.pathParameters['id'] ?? '',
@@ -184,3 +211,23 @@ final routerProvider = Provider<GoRouter>((ref) {
     ),
   );
 });
+
+/// Bridges the auth notifier and the published legal texts into a single
+/// [Listenable] so GoRouter re-runs its redirect when either changes.
+class _RouterRefresh extends ChangeNotifier {
+  _RouterRefresh(Ref ref, this._authNotifier) {
+    _authNotifier.addListener(notifyListeners);
+    _legalSub =
+        ref.listen(legalTextsProvider, (_, __) => notifyListeners());
+  }
+
+  final Listenable _authNotifier;
+  late final ProviderSubscription _legalSub;
+
+  @override
+  void dispose() {
+    _authNotifier.removeListener(notifyListeners);
+    _legalSub.close();
+    super.dispose();
+  }
+}
