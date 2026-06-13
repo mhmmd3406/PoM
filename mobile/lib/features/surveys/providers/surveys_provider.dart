@@ -135,15 +135,16 @@ final experienceResultProvider = Provider<ExperienceResult?>((ref) {
 /// `survey_aggregates/{surveyId}__{companyId}` (written by the
 /// computeSurveyAggregate CF). Drives the insights "Karşılaştırma" view.
 /// firestore.rules only allow the caller to read their own company's doc.
-final surveyAggregateProvider = FutureProvider.family<SurveyAggregate?,
-    ({String surveyId, String companyId})>((ref, args) async {
+final surveyAggregateProvider = StreamProvider.family<SurveyAggregate?,
+    ({String surveyId, String companyId})>((ref, args) {
   final db = ref.watch(firestoreProvider);
-  final doc = await db
+  // Snapshot stream (not get()): auto-reconnects, so a cold-start
+  // `cloud_firestore/unavailable` resolves itself instead of caching as an error.
+  return db
       .collection('survey_aggregates')
       .doc('${args.surveyId}__${args.companyId}')
-      .get();
-  if (!doc.exists) return null;
-  return SurveyAggregate.fromFirestore(doc);
+      .snapshots()
+      .map((doc) => doc.exists ? SurveyAggregate.fromFirestore(doc) : null);
 });
 
 // ─── Cross-company survey benchmark (Şirket Karşılaştırması) ───────────────────
@@ -166,10 +167,11 @@ final experienceSurveyIdProvider = Provider<String?>((ref) {
 /// anonymized company + sector averages. Drives the "Şirket Karşılaştırması"
 /// survey comparison.
 final surveyBenchmarkProvider =
-    FutureProvider.family<SurveyBenchmark?, String>((ref, surveyId) async {
+    StreamProvider.family<SurveyBenchmark?, String>((ref, surveyId) {
   final db = ref.watch(firestoreProvider);
-  final doc =
-      await db.collection('survey_benchmarks').doc(surveyId).get();
-  if (!doc.exists) return null;
-  return SurveyBenchmark.fromFirestore(doc);
+  return db
+      .collection('survey_benchmarks')
+      .doc(surveyId)
+      .snapshots()
+      .map((doc) => doc.exists ? SurveyBenchmark.fromFirestore(doc) : null);
 });
