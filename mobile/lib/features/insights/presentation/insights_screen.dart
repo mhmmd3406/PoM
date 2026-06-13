@@ -1294,27 +1294,41 @@ class _HighlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Dark mode: the fixed light washes (sageWash/amberWash) leave the light
+    // ink subject/description unreadable. Swap to the dark wash + lighter accent.
+    final effBg = !isDark
+        ? bgColor
+        : bgColor == AppColors.amberWash
+            ? AppColors.amberSoftDark
+            : AppColors.sageWashDark;
+    final effAccent = !isDark
+        ? iconColor
+        : iconColor == AppColors.amberDeep
+            ? AppColors.amberDark
+            : AppColors.sageDark;
+    final effBorder = isDark ? effAccent : borderColor;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
-        color: bgColor,
+        color: effBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor.withValues(alpha: 0.4), width: 1),
+        border: Border.all(color: effBorder.withValues(alpha: 0.4), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: iconColor, size: 16),
+              Icon(icon, color: effAccent, size: 16),
               const SizedBox(width: 6),
               Text(
                 badge,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: iconColor,
+                  color: effAccent,
                   letterSpacing: 0.4,
                 ),
               ),
