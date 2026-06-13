@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/user_model.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../surveys/data/survey_fixtures.dart';
 import '../data/auth_repository.dart';
 
 // ─── Auth State ───────────────────────────────────────────────────────────────
@@ -35,7 +36,10 @@ class AuthState {
 
 // ─── Debug users (debug bypass only) ─────────────────────────────────────────
 
-const _kDebugUsers = [
+// Each persona carries the synthetic gate-survey completion (answers + answered
+// id) so the personal result, home card and survey list render in auth-bypass
+// debug builds. See [survey_fixtures].
+final _kDebugUsers = <UserModel>[
   UserModel(
     uid: 'debug_free',
     linkedinHash: 'hash_free',
@@ -47,6 +51,8 @@ const _kDebugUsers = [
     creditBalance: 0,
     companyId: 'startup_co',
     department: 'Pazarlama',
+    answeredSurveyIds: const [kFixtureGateSurveyId],
+    surveyAnswers: {kFixtureGateSurveyId: kFixtureGateAnswers},
   ),
   UserModel(
     uid: 'debug_pro',
@@ -59,6 +65,8 @@ const _kDebugUsers = [
     creditBalance: 150,
     companyId: 'garanti_bbva',
     department: 'Ürün',
+    answeredSurveyIds: const [kFixtureGateSurveyId],
+    surveyAnswers: {kFixtureGateSurveyId: kFixtureGateAnswers},
   ),
   UserModel(
     uid: 'debug_enterprise',
@@ -71,6 +79,8 @@ const _kDebugUsers = [
     creditBalance: 500,
     companyId: 'turkcell',
     department: 'İnsan Kaynakları',
+    answeredSurveyIds: const [kFixtureGateSurveyId],
+    surveyAnswers: {kFixtureGateSurveyId: kFixtureGateAnswers},
   ),
   UserModel(
     uid: 'debug_daas',
@@ -83,14 +93,15 @@ const _kDebugUsers = [
     creditBalance: 1200,
     companyId: 'akbank',
     department: 'Teknoloji',
+    answeredSurveyIds: const [kFixtureGateSurveyId],
+    surveyAnswers: {kFixtureGateSurveyId: kFixtureGateAnswers},
   ),
 ];
 
-// ignore: prefer_const_declarations
 final _testUser = _kDebugUsers[1]; // pro kullanıcı varsayılan
 
 /// Tüm debug kullanıcılarına dışarıdan erişim (ProfileScreen için).
-const kDebugUsers = _kDebugUsers;
+final kDebugUsers = _kDebugUsers;
 
 // ─── Auth State Notifier ──────────────────────────────────────────────────────
 
