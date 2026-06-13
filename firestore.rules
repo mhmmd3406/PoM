@@ -55,6 +55,15 @@ service cloud.firestore {
     }
 
     // ── platform config ──────────────────────────────────────────────────────
+    // Legal texts (KVKK, gizlilik, kullanım şartları, …) are public legal
+    // notices: readable without auth so the app can show them pre-login and in
+    // debug-bypass builds. Rules are additive, so this widens read only for this
+    // single doc; the generic rule below still admin-gates writes. No personal,
+    // survey, or company data lives here.
+    match /platform_config/legal_texts {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
     match /platform_config/{doc} {
       allow read:  if isAuthenticated();
       allow write: if isAdmin();
