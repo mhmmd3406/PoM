@@ -301,24 +301,45 @@ export const linkedinAuth = onCall(
 // 2. createPaymentIntent — HTTPS Callable (Auth required)
 // ---------------------------------------------------------------------------
 
+// Authoritative credit packs (credits → price in TRY). The client MUST NOT
+// dictate the charge amount independently of the credit count, otherwise a
+// crafted request could pay 1 kuruş for an arbitrary number of credits. The
+// server derives the amount from `creditAmount` against this allow-list, so the
+// client-supplied `amount` is never trusted. Mirrors AppConstants.creditPacks
+// in mobile/lib/core/constants/app_constants.dart — keep the two in sync.
+const CREDIT_PACKS: Record<number, number> = {
+  10: 49,
+  50: 199,
+  100: 349,
+};
+
 export const createPaymentIntent = onCall(
   async (
-    request: CallableRequest<{ amount: number; currency: string; creditAmount: number }>
+    request: CallableRequest<{ amount?: number; currency: string; creditAmount: number }>
   ) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required");
     }
 
-    const { amount, currency, creditAmount } = request.data;
-    if (!amount || amount <= 0) {
-      throw new HttpsError("invalid-argument", "amount must be a positive number");
-    }
+    const { currency, creditAmount } = request.data;
     if (!currency) {
       throw new HttpsError("invalid-argument", "currency is required");
     }
-    if (!creditAmount || creditAmount <= 0) {
-      throw new HttpsError("invalid-argument", "creditAmount must be a positive number");
+    // Only TRY packs are sold; reject anything else so the amount lookup below
+    // (denominated in TRY kuruş) cannot be bypassed with a foreign currency.
+    if (currency.toLowerCase() !== "try") {
+      throw new HttpsError("invalid-argument", "currency must be 'try'");
     }
+    // Derive the charge amount server-side from the requested pack. Never trust
+    // request.data.amount — it is intentionally ignored.
+    const priceInTry = CREDIT_PACKS[creditAmount];
+    if (!priceInTry) {
+      throw new HttpsError(
+        "invalid-argument",
+        "creditAmount must match a valid credit pack"
+      );
+    }
+    const amount = priceInTry * 100; // TRY → kuruş
 
     const stripe = getStripe();
     const uid = request.auth.uid;
