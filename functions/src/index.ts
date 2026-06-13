@@ -1076,6 +1076,91 @@ export const computeSurveyAggregate = onSchedule(
 );
 
 // ---------------------------------------------------------------------------
+// 6d. submitSurveyResponse — HTTPS Callable (Auth required)
+// ---------------------------------------------------------------------------
+// Server-authoritative survey submission. Previously the mobile client wrote
+// survey_responses directly (+ incremented responseCount, + updated its own user
+// doc) in a batch, which firestore.rules could not fully constrain: rules cannot
+// hash sha256(uid) to prove the userIdHash belongs to the caller, nor enforce
+// one-response-per-user. That let a malicious client attribute responses to an
+// arbitrary userIdHash or stuff the ballot to skew a company's aggregates. This
+// callable closes both: the pseudonym is derived from request.auth.uid, the
+// companyId is taken from the survey (not the client), and a transaction enforces
+// a single response per user. firestore.rules now set survey_responses create to
+// `false` so this is the only write path.
+export const submitSurveyResponse = onCall(
+  async (
+    request: CallableRequest<{ surveyId: string; answers: Record<string, unknown> }>
+  ) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required");
+    }
+    const uid = request.auth.uid;
+    const { surveyId, answers } = request.data;
+    if (!surveyId || typeof surveyId !== "string") {
+      throw new HttpsError("invalid-argument", "surveyId is required");
+    }
+    if (!answers || typeof answers !== "object" || Array.isArray(answers)) {
+      throw new HttpsError("invalid-argument", "answers must be a map");
+    }
+
+    // Survey must exist. companyId is read from the survey (never the client) so a
+    // response cannot be mislabeled into another company's data pool. Platform
+    // surveys carry companyId '__admin__' on both sides.
+    const surveyRef = db.collection("surveys").doc(surveyId);
+    const surveySnap = await surveyRef.get();
+    if (!surveySnap.exists) {
+      throw new HttpsError("not-found", "Survey not found");
+    }
+    const surveyCompanyId =
+      (surveySnap.data()?.companyId as string | undefined) ?? "__admin__";
+
+    // Pseudonym used by computeSurveyAggregate to JOIN responses back to a user.
+    // MUST remain plain (unsalted) sha256(uid) to match that join + the mobile
+    // hashUserId it replaces.
+    const userIdHash = crypto.createHash("sha256").update(uid).digest("hex");
+    const userRef = db.collection("users").doc(uid);
+
+    // One response per user per survey, enforced transactionally on the user's own
+    // answeredSurveyIds (the app's source of truth) so two concurrent submits
+    // cannot both succeed.
+    await db.runTransaction(async (tx) => {
+      const userDoc = await tx.get(userRef);
+      const answered =
+        (userDoc.data()?.answeredSurveyIds as string[] | undefined) ?? [];
+      if (answered.includes(surveyId)) {
+        throw new HttpsError("already-exists", "Survey already answered");
+      }
+
+      const responseRef = db.collection("survey_responses").doc();
+      tx.set(responseRef, {
+        surveyId,
+        companyId: surveyCompanyId,
+        userIdHash,
+        answers,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      tx.update(surveyRef, {
+        responseCount: admin.firestore.FieldValue.increment(1),
+      });
+      // Mirror the answered state onto the owner-readable user doc so the app
+      // keeps working without reading survey_responses (admin/company-only).
+      tx.set(
+        userRef,
+        {
+          answeredSurveyIds: admin.firestore.FieldValue.arrayUnion(surveyId),
+          surveyAnswers: { [surveyId]: answers },
+        },
+        { merge: true }
+      );
+    });
+
+    logger.info("Survey response submitted", { surveyId, companyId: surveyCompanyId });
+    return { success: true };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // 7. getThresholds — HTTPS Callable (Auth required)
 // ---------------------------------------------------------------------------
 

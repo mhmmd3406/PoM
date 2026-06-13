@@ -1,18 +1,14 @@
-import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:crypto/crypto.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/providers/firebase_providers.dart';
 import 'survey_model.dart';
 
-String hashUserId(String uid) =>
-    sha256.convert(utf8.encode(uid)).toString();
-
 class SurveysRepository {
-  const SurveysRepository(this._db);
+  const SurveysRepository(this._db, this._functions);
   final FirebaseFirestore _db;
+  final FirebaseFunctions _functions;
 
   // All surveys the user is eligible to see (their company + platform-wide).
   // Status filtering is done client-side to avoid composite index requirements.
@@ -32,54 +28,28 @@ class SurveysRepository {
     return SurveyModel.fromFirestore(doc);
   }
 
-  /// Writes a pseudonymous survey response and records the survey as answered
-  /// on the user's own document. The response doc stays keyed by [userIdHash]
-  /// (no PII); only the owner-readable user doc learns which surveys were
-  /// answered, so the app never needs to read `survey_responses` (which
-  /// firestore.rules restrict to admins / company members).
+  /// Submits a survey response via the `submitSurveyResponse` Cloud Function.
+  /// The server derives the pseudonymous userIdHash from the caller's uid, reads
+  /// companyId from the survey, enforces one-response-per-user, and writes the
+  /// response + responseCount + the owner's answeredSurveyIds/surveyAnswers
+  /// atomically. The client no longer writes `survey_responses` directly
+  /// (firestore.rules now forbid it), which closes the arbitrary-userIdHash and
+  /// ballot-stuffing gaps.
   Future<void> submitResponse({
     required String surveyId,
-    required String companyId,
-    required String userIdHash,
-    required String? uid,
     required Map<String, dynamic> answers,
   }) async {
-    final batch = _db.batch();
-
-    final responseRef = _db.collection('survey_responses').doc();
-    batch.set(responseRef, {
+    final callable = _functions.httpsCallable('submitSurveyResponse');
+    await callable.call<Map<String, dynamic>>({
       'surveyId': surveyId,
-      'companyId': companyId,
-      'userIdHash': userIdHash,
       'answers': answers,
-      'created_at': FieldValue.serverTimestamp(),
     });
-
-    // Increment response count on the survey document.
-    batch.update(_db.collection('surveys').doc(surveyId), {
-      'responseCount': FieldValue.increment(1),
-    });
-
-    // Record the survey as answered on the user's own doc (owner-writable) —
-    // the app's source of truth for "already answered". Also persist this
-    // user's OWN answers under surveyAnswers.<surveyId> so the personal result
-    // view can be re-rendered later without reading `survey_responses` (which
-    // firestore.rules restrict to admins / company members).
-    if (uid != null) {
-      batch.set(
-        _db.collection('users').doc(uid),
-        {
-          'answeredSurveyIds': FieldValue.arrayUnion([surveyId]),
-          'surveyAnswers': {surveyId: answers},
-        },
-        SetOptions(merge: true),
-      );
-    }
-
-    await batch.commit();
   }
 }
 
 final surveysRepositoryProvider = Provider<SurveysRepository>((ref) {
-  return SurveysRepository(ref.watch(firestoreProvider));
+  return SurveysRepository(
+    ref.watch(firestoreProvider),
+    ref.watch(cloudFunctionsProvider),
+  );
 });
