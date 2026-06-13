@@ -158,12 +158,12 @@ class AuthStateNotifier extends Notifier<AuthState> implements Listenable {
     }
   }
 
-  Future<void> acceptKvkk() async {
+  Future<void> acceptKvkk(String version) async {
     final uid = state.user?.uid;
     if (uid == null) return;
     try {
       final repo = ref.read(authRepositoryProvider);
-      await repo.acceptKvkk(uid, '1.0');
+      await repo.acceptKvkk(uid, version);
       final updated = await repo.getUser(uid);
       state = AuthState(user: updated);
       _notifyListeners();
