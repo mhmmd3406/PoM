@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../data/survey_aggregate.dart';
+import '../data/survey_benchmark.dart';
 import '../data/survey_model.dart';
 import '../data/survey_scoring.dart';
 import '../data/surveys_repository.dart';
@@ -143,4 +144,32 @@ final surveyAggregateProvider = FutureProvider.family<SurveyAggregate?,
       .get();
   if (!doc.exists) return null;
   return SurveyAggregate.fromFirestore(doc);
+});
+
+// ─── Cross-company survey benchmark (Şirket Karşılaştırması) ───────────────────
+
+/// The experience survey to benchmark — the answered one if available, else the
+/// most recent categorized survey the user is eligible for (so the comparison
+/// works even before the user completes it; "Sen" is just omitted until then).
+final experienceSurveyIdProvider = Provider<String?>((ref) {
+  final answered = ref.watch(experienceResultProvider);
+  if (answered != null) return answered.survey.id;
+  final eligible = ref.watch(_eligibleSurveysProvider).valueOrNull ?? const [];
+  final exp = eligible.where(_isExperienceSurvey).toList()
+    ..sort((a, b) =>
+        (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+  return exp.isEmpty ? null : exp.first.id;
+});
+
+/// Cross-company, min-N-protected survey benchmark from `survey_benchmarks/{id}`
+/// (written by computeSurveyAggregate). Readable by any authenticated user —
+/// anonymized company + sector averages. Drives the "Şirket Karşılaştırması"
+/// survey comparison.
+final surveyBenchmarkProvider =
+    FutureProvider.family<SurveyBenchmark?, String>((ref, surveyId) async {
+  final db = ref.watch(firestoreProvider);
+  final doc =
+      await db.collection('survey_benchmarks').doc(surveyId).get();
+  if (!doc.exists) return null;
+  return SurveyBenchmark.fromFirestore(doc);
 });

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../surveys/data/survey_benchmark.dart';
+import '../../surveys/providers/surveys_provider.dart';
 import '../data/benchmarking_repository.dart';
 import '../providers/benchmarking_provider.dart';
 
@@ -129,6 +131,10 @@ class BenchmarkingScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               _ScoreGrid(companies: companies),
             ],
+
+            // ── Genel Anket karşılaştırması (48 soru) ─────────────────────────
+            const SizedBox(height: 24),
+            const _SurveyComparisonCard(),
           ],
         ),
       ),
@@ -815,6 +821,288 @@ class _EmptyState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── Genel Anket karşılaştırması (48 soru) ─────────────────────────────────────
+
+/// Compares the user's own 48-question survey category scores ("Sen") against
+/// selected companies / sector average / all companies, using the cross-company
+/// `survey_benchmarks` doc (min-N protected, anonymized). Reuses the screen's
+/// company selection; adds "Sektör Ortalaması" and "Tümü" toggles.
+class _SurveyComparisonCard extends ConsumerWidget {
+  const _SurveyComparisonCard();
+
+  static const _senColor = Color(0xFF1565C0);
+  static const _sectorColor = Color(0xFF78909C);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final surveyId = ref.watch(experienceSurveyIdProvider);
+
+    Widget shell(Widget child) => Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Genel Anket Karşılaştırması',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text(
+                  '48 soruluk Genel Anket — kendi skorunu seçtiğin şirketler, '
+                  'sektör ortalaması veya tüm şirketlerle karşılaştır.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 16),
+                child,
+              ],
+            ),
+          ),
+        );
+
+    if (surveyId == null) {
+      return shell(Text('Genel anket bulunamadı.',
+          style: Theme.of(context).textTheme.bodyMedium));
+    }
+
+    final benchAsync = ref.watch(surveyBenchmarkProvider(surveyId));
+    final personal = ref.watch(experienceResultProvider);
+    final selected = ref.watch(selectedCompaniesProvider);
+    final includeSector = ref.watch(surveyIncludeSectorProvider);
+    final showAll = ref.watch(surveyShowAllProvider);
+
+    return benchAsync.when(
+      loading: () => shell(const Center(
+          child: Padding(
+        padding: EdgeInsets.all(8),
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ))),
+      error: (_, __) => shell(Text('Karşılaştırma verisi yüklenemedi.',
+          style: Theme.of(context).textTheme.bodyMedium)),
+      data: (bench) {
+        if (bench == null || bench.companies.isEmpty) {
+          return shell(Text(
+            'Henüz karşılaştırılacak yeterli veri yok. Şirket ortalamaları '
+            'en az ${bench?.companyMinN ?? 15} yanıt toplandığında görünür.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ));
+        }
+
+        // Targets: companies (selected or all) + optional sector.
+        final companyTargets = showAll
+            ? bench.companies
+            : bench.companies
+                .where((c) => selected.any((s) => s.id == c.key))
+                .toList();
+        final sectorTargets =
+            includeSector ? bench.sectors.values.toList() : const <BenchGroup>[];
+        final targets = [...companyTargets, ...sectorTargets];
+
+        // Series = (Sen if available) + each target, each with a color.
+        final series =
+            <({String label, Color color, Map<String, double> cats})>[
+          if (personal != null)
+            (
+              label: 'Sen',
+              color: _senColor,
+              cats: {for (final c in personal.categories) c.name: c.score},
+            ),
+          for (var i = 0; i < targets.length; i++)
+            (
+              label: targets[i].label,
+              color: bench.sectors.containsKey(targets[i].key)
+                  ? _sectorColor
+                  : _kColors[i % _kColors.length],
+              cats: targets[i].categories,
+            ),
+        ];
+
+        // Category order: personal (sorted) else first series.
+        final orderSource = personal != null
+            ? [for (final c in personal.categories) c.name]
+            : (series.isNotEmpty
+                ? (series.first.cats.entries.toList()
+                      ..sort((a, b) => b.value.compareTo(a.value)))
+                    .map((e) => e.key)
+                    .toList()
+                : <String>[]);
+        final categories = <String>{
+          ...orderSource,
+          for (final s in series) ...s.cats.keys,
+        }.toList();
+
+        return shell(Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Target toggles
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                FilterChip(
+                  label: const Text('Sektör Ortalaması',
+                      style: TextStyle(fontSize: 12)),
+                  selected: includeSector,
+                  onSelected: (v) => ref
+                      .read(surveyIncludeSectorProvider.notifier)
+                      .state = v,
+                  visualDensity: VisualDensity.compact,
+                ),
+                FilterChip(
+                  label: const Text('Tümü', style: TextStyle(fontSize: 12)),
+                  selected: showAll,
+                  onSelected: (v) =>
+                      ref.read(surveyShowAllProvider.notifier).state = v,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+            if (!showAll && companyTargets.isEmpty && !includeSector) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Karşılaştırmak için yukarıdan şirket ekle, ya da "Tümü" / '
+                '"Sektör Ortalaması" aç.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ],
+            if (personal == null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 15, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Kendi "Sen" çubuğun için önce Genel Anketi tamamla.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (series.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              // Legend
+              Wrap(
+                spacing: 14,
+                runSpacing: 6,
+                children: [
+                  for (final s in series)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: s.color,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(s.label, style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Per-category grouped bars
+              for (var i = 0; i < categories.length; i++) ...[
+                _CategoryComparisonRow(
+                  category: categories[i],
+                  series: series,
+                ),
+                if (i < categories.length - 1) const SizedBox(height: 14),
+              ],
+            ],
+          ],
+        ));
+      },
+    );
+  }
+}
+
+class _CategoryComparisonRow extends StatelessWidget {
+  const _CategoryComparisonRow({
+    required this.category,
+    required this.series,
+  });
+
+  final String category;
+  final List<({String label, Color color, Map<String, double> cats})> series;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(category,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        for (final s in series) ...[
+          _ComparisonBar(value: s.cats[category], color: s.color),
+          const SizedBox(height: 4),
+        ],
+      ],
+    );
+  }
+}
+
+class _ComparisonBar extends StatelessWidget {
+  const _ComparisonBar({required this.value, required this.color});
+
+  final double? value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = value != null ? ((value! - 1) / 4).clamp(0.0, 1.0) : 0.0;
+    return Row(
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: t,
+              minHeight: 8,
+              backgroundColor: color.withValues(alpha: 0.14),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 28,
+          child: Text(
+            value != null ? value!.toStringAsFixed(1) : '—',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
