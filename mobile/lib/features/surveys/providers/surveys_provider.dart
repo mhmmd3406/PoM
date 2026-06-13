@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../data/survey_aggregate.dart';
 import '../data/survey_benchmark.dart';
+import '../data/survey_fixtures.dart';
 import '../data/survey_model.dart';
 import '../data/survey_scoring.dart';
 import '../data/surveys_repository.dart';
@@ -11,8 +14,13 @@ import '../data/surveys_repository.dart';
 export '../data/survey_model.dart';
 export '../data/surveys_repository.dart' show hashUserId, surveysRepositoryProvider;
 
+/// True in auth-bypass debug builds, where there is no Firebase auth and the
+/// real survey/aggregate/benchmark docs cannot be read — fixtures stand in.
+const _useFixtures = kDebugMode && AppConstants.debugBypassAuth;
+
 // All surveys visible to the current user (admin + company), unfiltered by status.
 final _eligibleSurveysProvider = StreamProvider<List<SurveyModel>>((ref) {
+  if (_useFixtures) return Stream.value([kFixtureGateSurvey]);
   final user = ref.watch(currentUserProvider);
   if (user == null) return const Stream.empty();
   return ref
@@ -60,6 +68,9 @@ final completedSurveysProvider = Provider<AsyncValue<List<SurveyModel>>>((ref) {
 // Single survey by Firestore document ID.
 final surveyByIdProvider =
     FutureProvider.family<SurveyModel?, String>((ref, id) {
+  if (_useFixtures && id == kFixtureGateSurveyId) {
+    return Future.value(kFixtureGateSurvey);
+  }
   return ref.watch(surveysRepositoryProvider).getSurvey(id);
 });
 
@@ -137,6 +148,7 @@ final experienceResultProvider = Provider<ExperienceResult?>((ref) {
 /// firestore.rules only allow the caller to read their own company's doc.
 final surveyAggregateProvider = StreamProvider.family<SurveyAggregate?,
     ({String surveyId, String companyId})>((ref, args) {
+  if (_useFixtures) return Stream.value(fixtureAggregate(args.companyId));
   final db = ref.watch(firestoreProvider);
   // Snapshot stream (not get()): auto-reconnects, so a cold-start
   // `cloud_firestore/unavailable` resolves itself instead of caching as an error.
@@ -168,6 +180,7 @@ final experienceSurveyIdProvider = Provider<String?>((ref) {
 /// survey comparison.
 final surveyBenchmarkProvider =
     StreamProvider.family<SurveyBenchmark?, String>((ref, surveyId) {
+  if (_useFixtures) return Stream.value(kFixtureBenchmark);
   final db = ref.watch(firestoreProvider);
   return db
       .collection('survey_benchmarks')
