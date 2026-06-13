@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../constants/app_constants.dart';
 import '../../features/auth/presentation/kvkk_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
@@ -60,14 +62,21 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // Re-prompt KVKK when the published version differs from the one the user
       // accepted — so the accepted text always equals the live text. Fail open:
-      // if the published version is unknown (loading / error / unpublished, e.g.
-      // debug bypass with no Firebase auth), fall back to the accepted flag and
-      // never lock the user out.
+      // if the published version is unknown (loading / error / unpublished) fall
+      // back to the accepted flag and never lock the user out.
+      //
+      // Debug-bypass is exempt: the synthetic test user has no Firebase auth, so
+      // acceptKvkk's Firestore write would fail and trap the user on the KVKK
+      // screen. Since legal_texts is now publicly readable, the published version
+      // *is* known in bypass, so without this guard the version mismatch would
+      // bounce every navigation. Test users keep working with no LinkedIn login.
+      final inBypass = kDebugMode && AppConstants.debugBypassAuth;
       final publishedKvkkVersion =
           ref.read(legalTextsProvider).valueOrNull?['kvkk']?.version;
       final acceptedVersion = authState.user?.kvkkVersion;
       final needsKvkk = !kvkkAccepted ||
-          (publishedKvkkVersion != null &&
+          (!inBypass &&
+              publishedKvkkVersion != null &&
               publishedKvkkVersion.isNotEmpty &&
               publishedKvkkVersion != acceptedVersion);
 
