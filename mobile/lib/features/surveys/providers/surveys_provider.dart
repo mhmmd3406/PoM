@@ -12,7 +12,7 @@ import '../data/survey_scoring.dart';
 import '../data/surveys_repository.dart';
 
 export '../data/survey_model.dart';
-export '../data/surveys_repository.dart' show hashUserId, surveysRepositoryProvider;
+export '../data/surveys_repository.dart' show surveysRepositoryProvider;
 
 /// True in auth-bypass debug builds, where there is no Firebase auth and the
 /// real survey/aggregate/benchmark docs cannot be read — fixtures stand in.

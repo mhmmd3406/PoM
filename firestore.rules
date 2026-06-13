@@ -129,13 +129,12 @@ service cloud.firestore {
       allow create: if isAdmin()
         || (isCompanyAdmin() && isCompanyMember(request.resource.data.companyId));
 
+      // responseCount is bumped server-side by the submitSurveyResponse Cloud
+      // Function (Admin SDK bypasses rules) together with the response write, so
+      // clients no longer need — and must not have — a self-increment path (it
+      // let any user inflate a survey's count independently of real responses).
       allow update: if isAdmin()
-        || (isCompanyAdmin() && isCompanyMember(resource.data.companyId))
-        || (isAuthenticated()
-            && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['responseCount'])
-            && request.resource.data.responseCount
-                 == resource.data.responseCount + 1);
+        || (isCompanyAdmin() && isCompanyMember(resource.data.companyId));
 
       allow delete: if isAdmin()
         || (isCompanyAdmin() && isCompanyMember(resource.data.companyId));
@@ -143,35 +142,19 @@ service cloud.firestore {
 
     // ── survey responses ─────────────────────────────────────────────────────
     // Pseudonymous response docs (userIdHash + answers, no PII).
-    // create → authenticated kullanıcı, AMA sıkı şekil + şirket bütünlüğü ile:
-    //   • Sadece beklenen alanlar yazılabilir (fazladan alan enjeksiyonu yok).
-    //   • Yanıtın companyId'si, cevapladığı survey'in companyId'si ile birebir
-    //     eşleşmeli (referans verilen survey gerçekten var olmalı). Böylece bir
-    //     kullanıcı yanıtı keyfi/başka bir şirkete etiketleyip o şirketin veri
-    //     havuzunu sabote edemez. Mobil zaten companyId: survey.companyId yazıyor
-    //     (platform anketlerinde her iki tarafta da '__admin__'), o yüzden bu
-    //     kural meşru akışı bozmaz; yalnızca kötü niyetli istemciyi engeller.
-    //   NOT (eksik kalan koruma): Kullanıcı başına TEK yanıt ve userIdHash'in
-    //     çağırana ait olduğunun doğrulanması kural katmanında yapılamaz (rules
-    //     sha256 hesaplayamaz, doc'ta uid yok). Tam koruma için yanıt yazımı bir
-    //     callable Cloud Function'a taşınmalı (hash'i request.auth.uid'den türetip
-    //     mükerrer yanıtı engeller; create: if false yapılır). Ayrı PR önerilir.
+    // create → YALNIZ submitSurveyResponse Cloud Function (Admin SDK kuralları
+    //   bypass eder). İstemci doğrudan yazamaz: rules sha256(uid) hesaplayıp
+    //   userIdHash'in çağırana ait olduğunu kanıtlayamaz ve kullanıcı-başına-tek
+    //   yanıtı dayatamaz. CF userIdHash'i request.auth.uid'den türetir, companyId'yi
+    //   survey'den alır ve mükerrer yanıtı transaction ile engeller — böylece
+    //   keyfi userIdHash ataması ve oy-doldurma (ballot stuffing) kapanır.
     // read   → is_admin VEYA aynı şirketin üyesi (company_id claim eşleşmesi).
     //   Mobil artık survey_responses OKUMUYOR; "zaten cevaplandı" bilgisi
     //   users/{uid}.answeredSurveyIds'te tutulur (yalnız sahibe açık).
     // update/delete → is_admin only
     match /survey_responses/{responseId} {
       allow read:   if isAdmin() || isCompanyMember(resource.data.companyId);
-      allow create: if isAuthenticated()
-        && request.resource.data.keys().hasOnly(
-             ['surveyId', 'companyId', 'userIdHash', 'answers', 'created_at'])
-        && request.resource.data.surveyId is string
-        && request.resource.data.companyId is string
-        && request.resource.data.userIdHash is string
-        && request.resource.data.answers is map
-        && exists(/databases/$(database)/documents/surveys/$(request.resource.data.surveyId))
-        && get(/databases/$(database)/documents/surveys/$(request.resource.data.surveyId)).data.companyId
-             == request.resource.data.companyId;
+      allow create: if false; // yalnız submitSurveyResponse Cloud Function
       allow update, delete: if isAdmin();
     }
 

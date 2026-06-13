@@ -79,7 +79,6 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
 
     try {
       final repo = ref.read(surveysRepositoryProvider);
-      final hash = user != null ? hashUserId(user.uid) : 'anonymous';
 
       // Build answers map: questionId → answer value
       final answersMap = <String, dynamic>{};
@@ -90,11 +89,9 @@ class _SurveyAnswerScreenState extends ConsumerState<SurveyAnswerScreen> {
         }
       }
 
+      // Server derives the pseudonym + companyId and enforces single-submit.
       await repo.submitResponse(
         surveyId: survey.id,
-        companyId: survey.companyId,
-        userIdHash: hash,
-        uid: user?.uid,
         answers: answersMap,
       );
 
