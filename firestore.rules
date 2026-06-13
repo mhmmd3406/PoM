@@ -177,6 +177,16 @@ service cloud.firestore {
       allow write: if false; // yalnız Cloud Functions (Admin SDK kuralları bypass eder)
     }
 
+    // ── survey_benchmarks (Cloud Functions only) ──────────────────────────────
+    // Çapraz-şirket benchmark: min-N geçmiş şirketlerin ANONİM ortalamaları +
+    // sektör ortalamaları (kişi/departman yok, alt-min-N grup yok). companies/
+    // benchmarks ile aynı desen: app okur, yalnız CF yazar. "Şirket
+    // Karşılaştırması" anket kıyasını besler.
+    match /survey_benchmarks/{surveyId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
     // ── platform yönetim koleksiyonları (admin panel) ─────────────────────────
     // NOT: feature_flags ve legal_texts, platform_config/{doc} altında saklanır;
     // o koleksiyon yukarıda zaten read: authenticated / write: isAdmin() ile korunur.

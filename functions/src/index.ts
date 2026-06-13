@@ -936,7 +936,11 @@ export const computeSurveyAggregate = onSchedule(
     }
     const companiesSnap = await db.collection("companies").get();
     const industryOf = new Map<string, string>();
-    for (const d of companiesSnap.docs) industryOf.set(d.id, (d.data().industry as string) ?? "Diğer");
+    const nameOf = new Map<string, string>();
+    for (const d of companiesSnap.docs) {
+      industryOf.set(d.id, (d.data().industry as string) ?? "Diğer");
+      nameOf.set(d.id, (d.data().name as string) ?? d.id);
+    }
 
     // Experience surveys = active surveys whose questions carry categories.
     const surveysSnap = await db.collection("surveys").where("status", "==", "active").get();
@@ -996,6 +1000,52 @@ export const computeSurveyAggregate = onSchedule(
         });
         docsWritten += 1;
       }
+
+      // Cross-company benchmark doc: anonymized, min-N-cleared company averages +
+      // sector averages, readable by any authenticated user (the benchmarking
+      // product). Only companies that cleared the company floor are listed — no
+      // individuals, no sub-min-N groups. Drives the "Şirket Karşılaştırması"
+      // survey comparison (Sen vs selected companies / sector / all).
+      const benchCompanies = Object.keys(companyAcc)
+        .map((companyId) => {
+          const s = summarize(companyAcc[companyId], companyMinN);
+          if (s.locked) return null;
+          return {
+            companyId,
+            name: nameOf.get(companyId) ?? companyId,
+            industry: industryOf.get(companyId) ?? "Diğer",
+            n: s.n,
+            overall: s.overall,
+            categories: s.categories,
+            enps: s.enps,
+          };
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null)
+        .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0));
+
+      const benchSectors: Record<string, unknown> = {};
+      for (const [industry, sa] of Object.entries(sectorAcc)) {
+        const s = summarize(sa, companyMinN);
+        if (s.locked) continue;
+        benchSectors[industry] = {
+          industry,
+          nCompanies: sa.companies.size,
+          n: s.n,
+          overall: s.overall,
+          categories: s.categories,
+          enps: s.enps,
+        };
+      }
+
+      batch.set(db.collection("survey_benchmarks").doc(sdoc.id), {
+        surveyId: sdoc.id,
+        companyMinN,
+        companies: benchCompanies,
+        sectors: benchSectors,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      docsWritten += 1;
+
       await batch.commit();
       surveysProcessed += 1;
     }
