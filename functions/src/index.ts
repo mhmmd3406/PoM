@@ -8,12 +8,30 @@
 import { onCall, onRequest, CallableRequest, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 import { applyThresholdFloors, sanitizeThresholdInput } from "./thresholds";
 import axios from "axios";
 import * as crypto from "crypto";
 import Stripe from "stripe";
+
+// ---------------------------------------------------------------------------
+// Secrets (gen2) — bound to each consuming function via `secrets: [...]` below.
+// Without these declarations + bindings the values are NOT injected into
+// process.env at runtime; the code would silently fall back to defaults. For
+// USER_HASH_SALT that is catastrophic: every userIdHash would change and break
+// owner access to existing check-ins/insights. Stored in Secret Manager
+// (firebase functions:secrets:set <NAME>). The handlers keep reading
+// process.env.<NAME> (populated when the secret is bound).
+// ---------------------------------------------------------------------------
+
+const USER_HASH_SALT = defineSecret("USER_HASH_SALT");
+const LINKEDIN_HMAC_SECRET = defineSecret("LINKEDIN_HMAC_SECRET");
+const LINKEDIN_CLIENT_ID = defineSecret("LINKEDIN_CLIENT_ID");
+const LINKEDIN_CLIENT_SECRET = defineSecret("LINKEDIN_CLIENT_SECRET");
+const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
+const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 // ---------------------------------------------------------------------------
 // Initialisation
@@ -112,6 +130,14 @@ function avg(values: number[]): number | null {
 // ---------------------------------------------------------------------------
 
 export const linkedinAuth = onCall(
+  {
+    secrets: [
+      USER_HASH_SALT,
+      LINKEDIN_HMAC_SECRET,
+      LINKEDIN_CLIENT_ID,
+      LINKEDIN_CLIENT_SECRET,
+    ],
+  },
   async (request: CallableRequest<{ code: string; redirectUri?: string }>) => {
     const { code, redirectUri } = request.data;
     if (!code) {
@@ -288,6 +314,7 @@ const CREDIT_PACKS: Record<number, number> = {
 };
 
 export const createPaymentIntent = onCall(
+  { secrets: [STRIPE_SECRET_KEY] },
   async (
     request: CallableRequest<{ amount?: number; currency: string; creditAmount: number }>
   ) => {
@@ -364,6 +391,7 @@ export const createPaymentIntent = onCall(
 // ---------------------------------------------------------------------------
 
 export const createSubscription = onCall(
+  { secrets: [STRIPE_SECRET_KEY] },
   async (request: CallableRequest<{ planId: "pro" | "enterprise" }>) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required");
@@ -436,7 +464,9 @@ export const createSubscription = onCall(
 // 4. stripeWebhook — HTTPS (public, validates Stripe signature)
 // ---------------------------------------------------------------------------
 
-export const stripeWebhook = onRequest(async (req, res) => {
+export const stripeWebhook = onRequest(
+  { secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET] },
+  async (req, res) => {
   const stripe = getStripe();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
 
@@ -567,6 +597,7 @@ export const stripeWebhook = onRequest(async (req, res) => {
 // ---------------------------------------------------------------------------
 
 export const cancelSubscription = onCall(
+  { secrets: [STRIPE_SECRET_KEY] },
   async (request: CallableRequest<{ subscriptionId: string }>) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required");
@@ -612,7 +643,9 @@ export const cancelSubscription = onCall(
 // 6b. deleteAccount — HTTPS Callable (Auth required)
 // ---------------------------------------------------------------------------
 
-export const deleteAccount = onCall(async (request: CallableRequest<unknown>) => {
+export const deleteAccount = onCall(
+  { secrets: [USER_HASH_SALT] },
+  async (request: CallableRequest<unknown>) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -684,7 +717,9 @@ type CheckinDoc = {
 };
 
 export const computeInsights = onDocumentCreated(
-  "checkins/{checkinId}",
+  // Pinned to europe-west1 to match the live deployment; without this the source
+  // would redeploy to the default us-central1 and create a duplicate function.
+  { document: "checkins/{checkinId}", region: "europe-west1" },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
