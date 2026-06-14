@@ -37,17 +37,6 @@ class HomeScreen extends ConsumerWidget {
     final surface = isDark ? AppColors.darkSurface : AppColors.lightSurface;
     final border = isDark ? AppColors.borderDark : AppColors.borderLight;
 
-    final firstName = user?.displayName?.split(' ').first ?? 'Merhaba';
-    final initials = (user?.displayName?.isNotEmpty == true)
-        ? user!.displayName!
-            .trim()
-            .split(' ')
-            .where((p) => p.isNotEmpty)
-            .take(2)
-            .map((p) => p[0].toUpperCase())
-            .join()
-        : '?';
-
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
@@ -97,26 +86,20 @@ class HomeScreen extends ConsumerWidget {
                         onTap: () => _showProfileSheet(context, ref,
                             user: user, isDark: isDark, ink: ink, ink2: ink2,
                             surface: surface, border: border),
+                        // App users are pseudonymous: no name/photo collected, so
+                        // the avatar is a generic person glyph.
                         child: CircleAvatar(
                           radius: 19,
                           backgroundColor: isDark
                               ? AppColors.sageSoftDark
                               : AppColors.sageSoft,
-                          backgroundImage: user?.avatarUrl != null
-                              ? NetworkImage(user!.avatarUrl!)
-                              : null,
-                          child: user?.avatarUrl == null
-                              ? Text(
-                                  initials,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: isDark
-                                        ? AppColors.sageDark
-                                        : AppColors.sageDeep,
-                                  ),
-                                )
-                              : null,
+                          child: Icon(
+                            Icons.person,
+                            size: 20,
+                            color: isDark
+                                ? AppColors.sageDark
+                                : AppColors.sageDeep,
+                          ),
                         ),
                       ),
                     ],
@@ -134,7 +117,7 @@ class HomeScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${_greeting()}, $firstName',
+                        _greeting(),
                         style: TextStyle(fontSize: 14, color: ink3),
                       ),
                       const SizedBox(height: 4),
@@ -357,22 +340,11 @@ class HomeScreen extends ConsumerWidget {
               radius: 32,
               backgroundColor:
                   isDark ? AppColors.sageSoftDark : AppColors.sageSoft,
-              backgroundImage: user?.avatarUrl != null
-                  ? NetworkImage(user!.avatarUrl!)
-                  : null,
-              child: user?.avatarUrl == null
-                  ? Text(
-                      (user?.displayName?.isNotEmpty == true)
-                          ? user!.displayName![0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.w700, color: ink),
-                    )
-                  : null,
+              child: Icon(Icons.person, size: 32, color: ink),
             ),
             const SizedBox(height: 12),
             Text(
-              user?.displayName ?? 'İsimsiz Kullanıcı',
+              'PoM Kullanıcısı',
               style: TextStyle(
                   fontSize: 18, fontWeight: FontWeight.w700, color: ink),
             ),

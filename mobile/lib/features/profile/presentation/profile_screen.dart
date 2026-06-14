@@ -53,15 +53,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final divider = isDark ? AppColors.dividerDark  : AppColors.dividerLight;
     final bgAlt   = isDark ? AppColors.darkBgAlt    : AppColors.lightBgAlt;
 
-    // Derive initials from display name
-    final name     = user?.displayName ?? 'Kullanıcı';
-    final initials = name
-        .trim()
-        .split(' ')
-        .where((w) => w.isNotEmpty)
-        .take(2)
-        .map((w) => w[0].toUpperCase())
-        .join();
+    // App users are pseudonymous: no name/photo is collected, so the profile
+    // shows a neutral label and a generic avatar instead of a name/initials.
+    const name  = 'PoM Kullanıcısı';
     final email = user?.email ?? '';
     final dept  = user?.department ?? '';
 
@@ -122,16 +116,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             shape: BoxShape.circle,
                           ),
                           alignment: Alignment.center,
-                          child: user?.avatarUrl != null
-                              ? ClipOval(child: Image.network(user!.avatarUrl!, width: 64, height: 64, fit: BoxFit.cover))
-                              : Text(
-                                  initials,
-                                  style: GoogleFonts.bricolageGrotesque(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                          child: const Icon(Icons.person, size: 32, color: Colors.white),
                         ),
                         const SizedBox(width: 14),
                         // Name + email + chips
@@ -879,13 +864,8 @@ class _DebugUserSwitcherSheet extends StatelessWidget {
           ...kDebugUsers.map((u) {
             final isActive = u.uid == currentUid;
             final colors = _roleColors[u.role] ?? (bg: const Color(0xFFE5E7EB), fg: const Color(0xFF374151));
-            final initials = (u.displayName ?? '?')
-                .trim()
-                .split(' ')
-                .where((w) => w.isNotEmpty)
-                .take(2)
-                .map((w) => w[0].toUpperCase())
-                .join();
+            // Debug personas are nameless (like real app users); label by role.
+            final personaLabel = '${_roleLabels[u.role] ?? u.role} kullanıcı';
 
             return GestureDetector(
               onTap: isActive ? null : () => onSelect(u),
@@ -914,23 +894,20 @@ class _DebugUserSwitcherSheet extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
-                      child: Text(
-                        initials,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: isActive ? AppColors.blueDark : Colors.white70,
-                        ),
+                      child: Icon(
+                        Icons.person,
+                        size: 20,
+                        color: isActive ? AppColors.blueDark : Colors.white70,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Name + meta
+                    // Persona label + meta
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            u.displayName ?? '',
+                            personaLabel,
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,

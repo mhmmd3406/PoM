@@ -10,7 +10,6 @@ import { useAuth } from '../hooks/useAuth'
 interface UserDoc {
   id: string
   uid?: string
-  displayName?: string
   role?: string
   companyId?: string
   department?: string
@@ -184,7 +183,6 @@ export default function UsersPage() {
       list = list.filter(
         (u) =>
           u.id.toLowerCase().includes(q) ||
-          u.displayName?.toLowerCase().includes(q) ||
           u.companyId?.toLowerCase().includes(q) ||
           u.department?.toLowerCase().includes(q),
       )
@@ -208,15 +206,6 @@ export default function UsersPage() {
         >
           {u.id.slice(0, 10)}…
         </span>
-      ),
-    },
-    {
-      key: 'displayName',
-      header: 'Ad Soyad',
-      sortable: true,
-      exportValue: (u) => u.displayName ?? '',
-      render: (u) => (
-        <span className="text-sm font-medium text-gray-800">{u.displayName ?? '—'}</span>
       ),
     },
     {
@@ -320,7 +309,7 @@ export default function UsersPage() {
         emptyMessage="Kullanıcı bulunamadı."
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="UID, ad, şirket ara…"
+        searchPlaceholder="UID, şirket ara…"
         exportFilename="pom-kullanicilar"
       />
 
