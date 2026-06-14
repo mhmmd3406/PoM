@@ -12,7 +12,11 @@
  *
  * Admin / kurumsal portal hesapları HARİÇ tutulur (adları korunur):
  *   • admins/{uid} dokümanı olanlar, VEYA
- *   • Auth custom claim'i is_admin==true / company_admin==true olanlar.
+ *   • Auth custom claim'i is_admin==true / company_admin==true olanlar, VEYA
+ *   • Auth'ta e-posta/PAROLA provider'ı olanlar. (Uygulama kullanıcıları custom
+ *     token (LinkedIn) ile girer, parola provider'ı YOKTUR; portal/kurumsal
+ *     hesaplar e-posta/parola ile girer. Böylece henüz claim atanmamış bir
+ *     kurumsal hesap dahi korunur — claim zamanlamasından bağımsız.)
  *
  * Bu, "feat(privacy): uygulama kullanıcısı için ad-soyad ve profil fotoğrafı
  * toplamayı durdur" (PR-1) ile eşleşir: PR-1 yeni toplamayı durdurur, bu script
@@ -52,13 +56,21 @@ async function buildExcludeSet() {
   const adminsSnap = await db.collection('admins').get();
   adminsSnap.forEach((d) => exclude.add(d.id));
 
-  // 2) Auth custom claims is_admin / company_admin
+  // 2) Auth: is_admin / company_admin claim OR an email/password provider.
+  //    App users sign in with a custom token (LinkedIn) and have no password
+  //    provider; portal/corporate accounts use email/password — so this protects
+  //    them even before their company_admin claim is assigned.
   let pageToken;
   do {
     const res = await auth.listUsers(1000, pageToken);
     for (const u of res.users) {
       const c = u.customClaims || {};
-      if (c.is_admin === true || c.company_admin === true) exclude.add(u.uid);
+      const hasPasswordProvider = (u.providerData || []).some(
+        (p) => p.providerId === 'password',
+      );
+      if (c.is_admin === true || c.company_admin === true || hasPasswordProvider) {
+        exclude.add(u.uid);
+      }
     }
     pageToken = res.pageToken;
   } while (pageToken);
@@ -74,7 +86,7 @@ async function main() {
   console.log(APPLY ? 'MODE: --apply (writes)' : 'MODE: dry-run (no writes; pass --apply to execute)');
 
   const exclude = await buildExcludeSet();
-  console.log(`Excluded admin / company-admin accounts: ${exclude.size}`);
+  console.log(`Excluded admin / company-admin / password accounts: ${exclude.size}`);
 
   const usersSnap = await db.collection('users').get();
   console.log(`Total user docs: ${usersSnap.size}`);

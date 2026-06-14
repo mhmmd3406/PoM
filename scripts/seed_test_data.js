@@ -354,16 +354,25 @@ async function seedBenchmarks(users, perUser) {
     }
   }
 
+  // benchmarks/{industry} are keyed by real-world industry names (not seed_* ids),
+  // so guard against clobbering a real benchmark doc: skip any existing doc that
+  // is NOT marked isSeedData. (Other collections use seed_* ids and can't collide.)
   const ops = [];
+  let skipped = 0;
   for (const [industry, dims] of Object.entries(byIndustry)) {
+    const ref = db.collection("benchmarks").doc(industry);
+    const existing = await ref.get();
+    if (existing.exists && existing.data().isSeedData !== true) {
+      console.warn(`  ! benchmarks/${industry} gerçek veri içeriyor — atlandı`);
+      skipped++;
+      continue;
+    }
     const scores = Object.fromEntries(DIMS.map((d) => [d, r2(mean(dims[d]))]));
     const n = dims[DIMS[0]].length;
-    ops.push({
-      ref: db.collection("benchmarks").doc(industry),
-      data: { scores, n, updated_at: ts(new Date()), isSeedData: true },
-    });
+    ops.push({ ref, data: { scores, n, updated_at: ts(new Date()), isSeedData: true } });
   }
   await commitBatches(ops, "benchmarks");
+  if (skipped) console.log(`  (benchmarks: ${skipped} gerçek doküman korundu)`);
 }
 
 // ─── Clear seed data ───────────────────────────────────────────────────────────
