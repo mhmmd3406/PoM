@@ -101,8 +101,8 @@ class UserModel {
     return {
       'linkedinHash': linkedinHash,
       if (userIdHash.isNotEmpty) 'userIdHash': userIdHash,
-      if (displayName != null) 'displayName': displayName,
-      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      // displayName / avatarUrl are intentionally NOT written: app users are
+      // pseudonymous and no name/photo is collected (data minimization).
       'role': role,
       'isAdmin': isAdmin,
       'kvkkAccepted': kvkkAccepted,

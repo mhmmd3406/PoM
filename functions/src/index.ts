@@ -86,20 +86,6 @@ function hashUserId(uid: string): string {
   return crypto.createHmac("sha256", userHashSalt()).update(uid).digest("hex");
 }
 
-/** Extract the largest available profile image URL from a LinkedIn lite profile. */
-function extractLinkedinAvatar(profile: {
-  profilePicture?: {
-    "displayImage~"?: {
-      elements?: Array<{ identifiers?: Array<{ identifier?: string }> }>;
-    };
-  };
-}): string | null {
-  const elements = profile.profilePicture?.["displayImage~"]?.elements;
-  if (!elements || elements.length === 0) return null;
-  // LinkedIn returns ascending sizes; take the last (largest).
-  return elements[elements.length - 1]?.identifiers?.[0]?.identifier ?? null;
-}
-
 /** Simple OLS slope: returns slope of y = a + b*x over integer x = 0..n-1 */
 function olsSlope(values: number[]): number {
   const n = values.length;
@@ -158,20 +144,15 @@ export const linkedinAuth = onCall(
       throw new HttpsError("unauthenticated", "LinkedIn token exchange failed");
     }
 
-    // Fetch LinkedIn lite profile
-    let profile: {
-      id: string;
-      localizedFirstName: string;
-      localizedLastName: string;
-      profilePicture?: {
-        "displayImage~"?: {
-          elements?: Array<{ identifiers?: Array<{ identifier?: string }> }>;
-        };
-      };
-    };
+    // Fetch LinkedIn profile — ONLY the opaque member id, which is the sole input
+    // to the dedup hash (linkedinHash). Data minimization (KVKK m.4): we no longer
+    // request the member's name or profile picture for app users, so they are
+    // never fetched, returned, or stored. (Admin / corporate portal accounts are a
+    // separate email/password path and keep their names — see setAdminClaim.)
+    let profile: { id: string };
     try {
       const profileResp = await axios.get(
-        "https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))",
+        "https://api.linkedin.com/v2/me?projection=(id)",
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       profile = profileResp.data;
@@ -179,9 +160,6 @@ export const linkedinAuth = onCall(
       logger.error("LinkedIn profile fetch failed", err);
       throw new HttpsError("unauthenticated", "Could not fetch LinkedIn profile");
     }
-
-    const displayName = `${profile.localizedFirstName} ${profile.localizedLastName}`;
-    const avatarUrl = extractLinkedinAvatar(profile);
 
     // Best-effort email — requires the r_emailaddress scope. If it is not
     // granted the request 401s; we swallow it and return null rather than
@@ -215,10 +193,9 @@ export const linkedinAuth = onCall(
       isNewUser = false;
       logger.info("Existing LinkedIn user signed in", { uid });
     } else {
-      // New user — create Firebase Auth user
-      const authUser = await admin.auth().createUser({
-        displayName,
-      });
+      // New user — create Firebase Auth user. No displayName: app users are
+      // pseudonymous, the LinkedIn name is intentionally not collected.
+      const authUser = await admin.auth().createUser({});
       uid = authUser.uid;
       isNewUser = true;
 
@@ -230,10 +207,6 @@ export const linkedinAuth = onCall(
       batch.set(db.collection("users").doc(uid), {
         uid,
         linkedinHash,
-        displayName,
-        firstName: profile.localizedFirstName,
-        lastName: profile.localizedLastName,
-        avatarUrl: avatarUrl,
         email: email,
         role: "free",
         companyId: null,
@@ -290,10 +263,11 @@ export const linkedinAuth = onCall(
       linkedin_hash: linkedinHash,
     });
 
-    // Return the custom token plus the profile fields the mobile client needs
-    // to render immediately. `linkedinHash` is the server-computed dedup key so
-    // the client never re-hashes with a divergent secret.
-    return { customToken, isNewUser, linkedinHash, userIdHash, displayName, avatarUrl, email };
+    // Return the custom token plus the minimal fields the mobile client needs.
+    // `linkedinHash` is the server-computed dedup key so the client never
+    // re-hashes with a divergent secret. No name/avatar is returned — app users
+    // are pseudonymous (data minimization).
+    return { customToken, isNewUser, linkedinHash, userIdHash, email };
   }
 );
 
@@ -351,10 +325,10 @@ export const createPaymentIntent = onCall(
       : null;
 
     if (!stripeCustomerId) {
-      const userDoc = await db.collection("users").doc(uid).get();
+      // App users are pseudonymous (no name stored); the Stripe customer is keyed
+      // by firebase_uid only. The cardholder name is captured by Stripe at payment.
       const customer = await stripe.customers.create({
         metadata: { firebase_uid: uid },
-        name: userDoc.data()?.displayName ?? undefined,
       });
       stripeCustomerId = customer.id;
       await db
@@ -423,10 +397,9 @@ export const createSubscription = onCall(
       : null;
 
     if (!stripeCustomerId) {
-      const userDoc = await db.collection("users").doc(uid).get();
+      // Pseudonymous app user — no name stored; key the Stripe customer by uid.
       const customer = await stripe.customers.create({
         metadata: { firebase_uid: uid },
-        name: userDoc.data()?.displayName ?? undefined,
       });
       stripeCustomerId = customer.id;
     }

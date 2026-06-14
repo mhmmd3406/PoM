@@ -57,9 +57,18 @@ void main() {
     });
 
     test('toFirestore includes non-null optional fields', () {
-      final map = user.copyWith(displayName: 'Ali', companyId: 'acme').toFirestore();
-      expect(map['displayName'], 'Ali');
+      final map = user.copyWith(companyId: 'acme').toFirestore();
       expect(map['companyId'], 'acme');
+    });
+
+    test('toFirestore never writes name/photo (data minimization)', () {
+      // App users are pseudonymous: even if a model carries a name/avatar (e.g.
+      // legacy data read back), it must never be persisted.
+      final map = user
+          .copyWith(displayName: 'Ali', avatarUrl: 'https://x/p.jpg')
+          .toFirestore();
+      expect(map.containsKey('displayName'), false);
+      expect(map.containsKey('avatarUrl'), false);
     });
   });
 }

@@ -43,7 +43,6 @@ final _kDebugUsers = <UserModel>[
   UserModel(
     uid: 'debug_free',
     linkedinHash: 'hash_free',
-    displayName: 'Ayşe Kaya',
     email: 'ayse.kaya@pom.app',
     role: 'free',
     kvkkAccepted: true,
@@ -57,7 +56,6 @@ final _kDebugUsers = <UserModel>[
   UserModel(
     uid: 'debug_pro',
     linkedinHash: 'hash_pro',
-    displayName: 'Mehmet Demir',
     email: 'mehmet.demir@pom.app',
     role: 'pro',
     kvkkAccepted: true,
@@ -71,7 +69,6 @@ final _kDebugUsers = <UserModel>[
   UserModel(
     uid: 'debug_enterprise',
     linkedinHash: 'hash_enterprise',
-    displayName: 'Zeynep Arslan',
     email: 'zeynep.arslan@pom.app',
     role: 'enterprise',
     kvkkAccepted: true,
@@ -85,7 +82,6 @@ final _kDebugUsers = <UserModel>[
   UserModel(
     uid: 'debug_daas',
     linkedinHash: 'hash_daas',
-    displayName: 'Can Öztürk',
     email: 'can.ozturk@pom.app',
     role: 'daas',
     kvkkAccepted: true,
